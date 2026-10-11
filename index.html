@@ -22,6 +22,11 @@
     </div>
   </header>
 
+  <div class="warn" id="obsWarn" hidden>
+    <b>Ce panneau est ouvert hors d'OBS.</b> L'overlay dans OBS ne verra pas ce que tu fais ici, car OBS et ton navigateur ne partagent pas leurs données.
+    Ouvre-le dans OBS : <i>Docks → Docks de navigateur personnalisés</i>, URL <code id="dockUrl"></code>. Fais aussi l'import des .jar depuis ce dock.
+  </div>
+
   <div class="grid">
     <div class="left">
       <section class="panel" aria-label="Tirage au sort">
@@ -52,7 +57,7 @@
       <section class="panel" aria-label="Lien de l'overlay">
         <div class="panel-h"><span>Overlay OBS</span></div>
         <div class="links">
-          <span>Source navigateur, 1920 × 1080 :</span>
+          <span>Source navigateur (1920 × 1080 conseillé, s'adapte à toute taille) :</span>
           <code id="ovUrl"></code>
           <span>Options : <code>?pos=br</code> (bl, br, tl, tr), <code>&amp;sound=0</code>, <code>&amp;scale=1.2</code></span>
         </div>
@@ -220,11 +225,14 @@ function render(){ renderBoard(); renderClock(); renderHist(); refreshDrawBtn();
 
 /* ---------- état de l'overlay ---------- */
 setInterval(()=>{
-  let t=0; try{ t=+localStorage.getItem(HB)||0; }catch(e){}
-  const on=Date.now()-t<3000;
-  $("hbDot").classList.toggle("on",on); $("hbTxt").textContent= on?"overlay connecté":"overlay non détecté";
+  const hb=readHeartbeat(), alive=hb && Date.now()-hb.t<3000;
+  const on=alive && hb.obs;
+  $("hbDot").classList.toggle("on",on);
+  $("hbTxt").textContent= on ? "overlay OBS connecté" : alive ? "overlay ouvert hors d'OBS" : "overlay non détecté";
 },1000);
+$("obsWarn").hidden = IN_OBS;
 $("ovUrl").textContent = new URL("overlay.html", location.href).href;
+$("dockUrl").textContent = new URL("./", location.href).href;
 
 /* ---------- import des .jar ---------- */
 const SKIP_NS=new Set(["minecraft","c","forge","neoforge","fabric","realms","quilt"]);

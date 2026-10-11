@@ -19,8 +19,10 @@ Le site est statique, il n'y a rien à compiler.
 Les deux pages communiquent par le stockage du navigateur. Elles doivent donc **toutes les deux tourner dans OBS**. Le navigateur d'OBS et Chrome ne partagent pas leurs données.
 
 1. **Panneau de contrôle** : dans OBS, va dans *Docks → Docks de navigateur personnalisés*. Ajoute un dock nommé `Mod Rush` avec l'URL `https://ton-site.vercel.app/`.
-2. **Overlay** : dans ta scène, ajoute une *Source navigateur* avec l'URL `https://ton-site.vercel.app/overlay.html`, en 1920 × 1080. Coche « Contrôler l'audio via OBS » si tu veux récupérer les sons.
-3. En haut du dock, le voyant doit passer au vert (« overlay connecté »). S'il reste rouge, rafraîchis la source navigateur.
+2. **Overlay** : dans ta scène, ajoute une *Source navigateur* avec l'URL `https://ton-site.vercel.app/overlay.html`, de préférence en 1920 × 1080 (l'overlay s'adapte à toute autre taille). Coche « Contrôler l'audio via OBS » si tu veux récupérer les sons.
+3. En haut du dock, le voyant doit passer au vert (« overlay OBS connecté »). S'il affiche « overlay ouvert hors d'OBS », c'est un onglet de navigateur qui répond : ferme-le et rafraîchis la source navigateur dans OBS.
+
+Si le panneau est ouvert dans Chrome au lieu d'OBS, un bandeau rouge te le signale.
 
 Tu peux régler l'overlay en ajoutant des options à la fin de l'URL :
 

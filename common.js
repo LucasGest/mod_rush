@@ -1941,11 +1941,11 @@ function playSpin(stripEl, spin, {cell=CELL, sound=true, onDone}={}){
 }
 
 /* ---------- confettis pixel ---------- */
-function confetti(cv){
+function confetti(cv, W=innerWidth, H=innerHeight){
   if(matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const g=cv.getContext("2d"); cv.width=innerWidth; cv.height=innerHeight;
+  const g=cv.getContext("2d"); cv.width=W; cv.height=H;
   const cols=["#f2c14e","#86d14a","#e5483d","#5ec8e5","#ebe8de"];
-  const ps=Array.from({length:180},()=>({x:innerWidth/2+(Math.random()-.5)*240,y:innerHeight*.4,vx:(Math.random()-.5)*16,vy:-Math.random()*16-4,s:7+Math.random()*7|0,c:cols[Math.random()*5|0]}));
+  const ps=Array.from({length:180},()=>({x:W/2+(Math.random()-.5)*240,y:H*.4,vx:(Math.random()-.5)*16,vy:-Math.random()*16-4,s:7+Math.random()*7|0,c:cols[Math.random()*5|0]}));
   const t0=performance.now();
   (function f(now){
     g.clearRect(0,0,cv.width,cv.height);
@@ -1953,3 +1953,9 @@ function confetti(cv){
     if(now-t0<4000) requestAnimationFrame(f); else g.clearRect(0,0,cv.width,cv.height);
   })(t0);
 }
+
+/* battement de cœur de l'overlay : {t, obs} — obs vaut true quand la page tourne dans OBS */
+function readHeartbeat(){
+  try{ const raw=localStorage.getItem(HB); if(!raw) return null; const v=JSON.parse(raw); return typeof v==="number" ? {t:v, obs:false} : v; }catch(e){ return null; }
+}
+const IN_OBS = !!window.obsstudio;

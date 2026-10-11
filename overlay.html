@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=1920, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mod Rush Overlay</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Barlow:wght@500;600&family=JetBrains+Mono:wght@700&display=swap">
@@ -15,8 +15,8 @@
   --scale:1;
 }
 *{box-sizing:border-box}
-html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:transparent;color:var(--fg);font-family:var(--body)}
-#root{position:absolute;inset:0;transform-origin:0 0}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;color:var(--fg);font-family:var(--body)}
+#root{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
 .frame{background:var(--panel);border:4px solid var(--line);box-shadow:0 0 0 4px var(--ink),10px 10px 0 rgba(0,0,0,.45)}
 
 /* carte de progression */
@@ -97,7 +97,14 @@ let state=null, mods=[], namesKey="", seenSpin=null, seenEvent=null, spinning=fa
 const feed=[];
 
 /* battement de cœur pour que le panneau de contrôle sache que l'overlay tourne */
-setInterval(()=>{ try{ localStorage.setItem(HB, String(Date.now())); }catch(e){} },1000);
+setInterval(()=>{ try{ localStorage.setItem(HB, JSON.stringify({t:Date.now(), obs:IN_OBS})); }catch(e){} },1000);
+
+/* s'adapte à la taille de la source navigateur (prévu pour 1920×1080, fonctionne aussi en 1280×720, 800×600…) */
+function fit(){
+  const s=Math.min(innerWidth/1920, innerHeight/1080), r=$("root");
+  r.style.transform=`translate(${(innerWidth-1920*s)/2}px,${(innerHeight-1080*s)/2}px) scale(${s})`;
+}
+addEventListener("resize",fit); fit();
 
 function renderHud(){
   const r=state&&state.run, hud=$("hud");
@@ -141,7 +148,7 @@ function handle(s){
     if(!first && Date.now()-ev.id<5000){
       if(ev.type==="item"){ feed.unshift({mod:ev.mod,name:ev.name}); if(SOUND) beep(880+Math.random()*200,.08,"triangle",.08); }
       if(ev.type==="undo"){ feed.unshift({mod:ev.mod,name:ev.name,undo:true}); }
-      if(ev.type==="done"){ $("winTime").textContent=`${ev.mod} · ${fmt(ev.time)}`; $("win").classList.add("on"); if(SOUND) fanfare(); confetti($("fx")); setTimeout(()=>$("win").classList.remove("on"),9000); }
+      if(ev.type==="done"){ $("winTime").textContent=`${ev.mod} · ${fmt(ev.time)}`; $("win").classList.add("on"); if(SOUND) fanfare(); confetti($("fx"),1920,1080); setTimeout(()=>$("win").classList.remove("on"),9000); }
       if(ev.type==="start"){ feed.length=0; }
       feed.length=Math.min(feed.length,6);
     }
