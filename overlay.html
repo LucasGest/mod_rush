@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, initial-scale=1">
+<title>Mod Rush Overlay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Barlow:wght@500;600&family=JetBrains+Mono:wght@700&display=swap">
+<style>
+/* Overlay OBS 1920×1080, fond transparent : carte de progression dans un coin, roulette géante au centre pendant le tirage. */
+:root{
+  --panel:#1e2220; --panel-2:#272c29; --line:#343b37; --ink:#0b0d0c;
+  --fg:#ebe8de; --muted:#a7b0a9; --gold:#f2c14e; --gold-deep:#b5841c; --xp:#86d14a; --xp-deep:#4f8a25;
+  --display:"Pixelify Sans","Courier New",monospace; --body:"Barlow","Segoe UI",sans-serif; --mono:"JetBrains Mono",Consolas,monospace;
+  --scale:1;
+}
+*{box-sizing:border-box}
+html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:transparent;color:var(--fg);font-family:var(--body)}
+#root{position:absolute;inset:0;transform-origin:0 0}
+.frame{background:var(--panel);border:4px solid var(--line);box-shadow:0 0 0 4px var(--ink),10px 10px 0 rgba(0,0,0,.45)}
+
+/* carte de progression */
+.hud{position:absolute;width:560px;padding:22px 24px;display:flex;flex-direction:column;gap:14px;transform:scale(var(--scale));transition:opacity .4s, transform .4s}
+.pos-bl{left:40px;bottom:40px;transform-origin:left bottom}
+.pos-br{right:40px;bottom:40px;transform-origin:right bottom}
+.pos-tl{left:40px;top:40px;transform-origin:left top}
+.pos-tr{right:40px;top:40px;transform-origin:right top}
+.hud.off{opacity:0}
+.eyebrow{font-family:var(--mono);font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);display:flex;justify-content:space-between}
+.modname{font-family:var(--display);font-weight:700;font-size:44px;line-height:1.02;margin:0;text-shadow:3px 3px 0 #000;overflow-wrap:anywhere}
+.line{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.count{font-size:22px;color:var(--muted)} .count b{font-size:34px;color:var(--fg)}
+.time{font-size:34px}
+.time.paused{color:var(--muted)} .time.done{color:var(--xp)}
+.xpbar{height:26px;background:#0e100f;border:3px solid var(--ink);position:relative;overflow:hidden}
+.xpfill{position:absolute;inset:0 auto 0 0;width:0;background:repeating-linear-gradient(90deg,var(--xp) 0 calc(100%/18 - 3px),var(--xp-deep) calc(100%/18 - 3px) calc(100%/18));transition:width .5s ease}
+.xplvl{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--display);font-size:20px;color:#fff;text-shadow:2px 2px 0 #000}
+.feed{display:flex;flex-direction:column;gap:8px}
+.toast{display:flex;align-items:center;gap:12px;padding:8px 10px;background:var(--panel-2);border:3px solid var(--line);animation:pop .45s cubic-bezier(.2,1.4,.4,1)}
+.toast.undo{opacity:.6}
+.toast .plus{font-family:var(--display);color:var(--xp);font-size:22px}
+.toast .nm{font-size:20px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot{flex:0 0 44px;height:44px;background:#8b8b8b;border:3px solid;border-color:#373737 #fff #fff #373737;display:grid;place-items:center}
+.slot img{width:32px;height:32px;image-rendering:pixelated;object-fit:cover;object-position:top}
+@keyframes pop{from{transform:translateX(-30px) scale(.9);opacity:0}to{transform:none;opacity:1}}
+
+/* roulette géante */
+.stage{position:absolute;left:50%;top:50%;width:1000px;transform:translate(-50%,-50%) scale(.9);opacity:0;transition:opacity .35s, transform .35s;pointer-events:none}
+.stage.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.stage .eyebrow{justify-content:center;font-size:20px;padding:14px;border-bottom:4px solid var(--line)}
+.reel{position:relative;height:330px;overflow:hidden;background:#0e100f}
+.reel::before,.reel::after{content:"";position:absolute;left:0;right:0;height:110px;z-index:2}
+.reel::before{top:0;background:linear-gradient(#0e100f,rgba(14,16,15,0))}
+.reel::after{bottom:0;background:linear-gradient(rgba(14,16,15,0),#0e100f)}
+.window{position:absolute;left:16px;right:16px;top:110px;height:110px;border:5px solid var(--gold);z-index:3;box-shadow:0 0 40px rgba(242,193,78,.35)}
+.strip{position:absolute;left:0;right:0;top:0}
+.cell{height:110px;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:50px;padding-inline:40px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:3px 3px 0 #000}
+.stage.reveal .window{animation:flash .5s steps(2) 3}
+@keyframes flash{50%{border-color:#fff;box-shadow:0 0 70px rgba(255,255,255,.6)}}
+
+/* bannière de victoire */
+.win{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%) scale(.8);opacity:0;text-align:center;padding:30px 60px;border-color:var(--xp-deep);transition:opacity .4s, transform .4s}
+.win.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.win h2{margin:0;font-family:var(--display);font-size:84px;color:var(--xp);text-shadow:5px 5px 0 #000}
+.win p{margin:8px 0 0;font-family:var(--mono);font-size:34px}
+canvas{position:absolute;inset:0;width:1920px;height:1080px;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.toast{animation:none}}
+</style>
+</head>
+<body>
+<div id="root">
+  <section class="hud frame off" id="hud">
+    <div class="eyebrow"><span>Mod Rush</span><span id="badge"></span></div>
+    <h1 class="modname" id="modname">—</h1>
+    <div class="line"><span class="count" id="count"></span><span class="time" id="time">00:00:00</span></div>
+    <div class="xpbar"><div class="xpfill" id="fill"></div><span class="xplvl" id="lvl">0%</span></div>
+    <div class="feed" id="feed"></div>
+  </section>
+
+  <section class="stage frame" id="stage">
+    <div class="eyebrow">Tirage du mod</div>
+    <div class="reel"><div class="strip" id="strip"></div><div class="window"></div></div>
+  </section>
+
+  <section class="win frame" id="win"><h2>MOD COMPLÉTÉ</h2><p id="winTime"></p></section>
+  <canvas id="fx"></canvas>
+</div>
+
+<script src="common.js"></script>
+<script>
+const P=new URLSearchParams(location.search);
+const SOUND=P.get("sound")!=="0";
+$("hud").classList.add("pos-"+(["bl","br","tl","tr"].includes(P.get("pos"))?P.get("pos"):"bl"));
+document.documentElement.style.setProperty("--scale", Math.min(2,Math.max(.5,parseFloat(P.get("scale"))||1)));
+
+let state=null, mods=[], namesKey="", seenSpin=null, seenEvent=null, spinning=false, first=true;
+const feed=[];
+
+/* battement de cœur pour que le panneau de contrôle sache que l'overlay tourne */
+setInterval(()=>{ try{ localStorage.setItem(HB, String(Date.now())); }catch(e){} },1000);
+
+function renderHud(){
+  const r=state&&state.run, hud=$("hud");
+  if(!r || spinning){ hud.classList.add("off"); return; }
+  const mod=mods.find(m=>m.name===r.mod); if(!mod){ hud.classList.add("off"); return; }
+  hud.classList.remove("off");
+  const got=r.checked.length, tot=mod.items.length;
+  $("modname").textContent=mod.name;
+  $("badge").textContent= state.full[mod.name] ? "100 % du mod" : "";
+  $("count").innerHTML=`<b>${got}</b> / ${tot} objets`;
+  $("fill").style.width=(got/tot*100)+"%";
+  $("lvl").textContent=Math.floor(got/tot*100)+"%";
+  $("feed").innerHTML=feed.filter(f=>f.mod===mod.name).slice(0,3).map(f=>`<div class="toast${f.undo?" undo":""}"><span class="slot"><img alt="" src="${iconFor(f.mod,f.name)}"></span><span class="plus">${f.undo?"−":"+"}</span><span class="nm">${esc(f.name)}</span></div>`).join("");
+}
+function renderTime(){
+  const r=state&&state.run; const t=$("time");
+  t.textContent=fmt(runElapsed(r));
+  t.className="time"+(r&&r.finished?" done":r&&r.paused?" paused":"");
+}
+setInterval(renderTime,250);
+
+function handle(s){
+  state=s;
+  const key=state.text.length+":"+hash(state.text);
+  if(key!==namesKey){ namesKey=key; mods=parse(state.text); buildReel($("strip"), mods.length?mods.map(m=>m.name):["Aucun mod"]); }
+  const sp=state.spin;
+  if(sp && sp.id!==seenSpin){
+    seenSpin=sp.id;
+    if(!first && Date.now()-sp.at < sp.dur){
+      spinning=true; feed.length=0; $("win").classList.remove("on");
+      $("stage").classList.remove("reveal"); $("stage").classList.add("on");
+      playSpin($("strip"), sp, { cell:110, sound:SOUND, onDone(){
+        $("stage").classList.add("reveal");
+        setTimeout(()=>{ $("stage").classList.remove("on"); spinning=false; renderHud(); },2600);
+      }});
+    }
+  }
+  const ev=state.event;
+  if(ev && ev.id!==seenEvent){
+    seenEvent=ev.id;
+    if(!first && Date.now()-ev.id<5000){
+      if(ev.type==="item"){ feed.unshift({mod:ev.mod,name:ev.name}); if(SOUND) beep(880+Math.random()*200,.08,"triangle",.08); }
+      if(ev.type==="undo"){ feed.unshift({mod:ev.mod,name:ev.name,undo:true}); }
+      if(ev.type==="done"){ $("winTime").textContent=`${ev.mod} · ${fmt(ev.time)}`; $("win").classList.add("on"); if(SOUND) fanfare(); confetti($("fx")); setTimeout(()=>$("win").classList.remove("on"),9000); }
+      if(ev.type==="start"){ feed.length=0; }
+      feed.length=Math.min(feed.length,6);
+    }
+  }
+  first=false;
+  renderHud(); renderTime();
+}
+
+(async()=>{ await loadIcons(); onSync(s=>{ /* recharge les icônes si un import vient d'avoir lieu */ if(Object.keys(s.full).some(k=>!ICONS[k])) loadIcons().then(()=>handle(loadState())); else handle(s); }); })();
+</script>
+</body>
+</html>
