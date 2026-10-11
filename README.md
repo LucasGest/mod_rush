@@ -29,6 +29,8 @@ Tu peux régler l'overlay en ajoutant des options à la fin de l'URL :
 - `?pos=br` place la carte dans un coin : `bl` (par défaut), `br`, `tl` ou `tr`.
 - `&scale=1.2` change la taille de la carte (de 0.5 à 2).
 - `&sound=0` coupe les sons de l'overlay.
+- `&ticker=0` masque le bandeau des objets à trouver en bas de l'écran.
+- `&speed=120` règle la vitesse de défilement du bandeau, en pixels par seconde (90 par défaut).
 
 ## Importer les listes complètes des mods
 
