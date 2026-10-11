@@ -32,6 +32,12 @@ Tu peux régler l'overlay en ajoutant des options à la fin de l'URL :
 - `&ticker=0` masque le bandeau des objets à trouver en bas de l'écran.
 - `&speed=120` règle la vitesse de défilement du bandeau, en pixels par seconde (90 par défaut).
 
+## Modpack intégré
+
+Le fichier `pack.json` contient les listes complètes et les icônes des 33 mods du profil ModRush. À la première ouverture du dock, la page le charge automatiquement : la roulette est prête sans rien importer. Pour le recharger plus tard, ouvre « Importer des mods (.jar) » et clique sur « Charger le modpack ModRush intégré au site ».
+
+Pendant un rush, le bouton **Retirer des objets** permet de supprimer définitivement d'un clic un objet impossible à obtenir en survie.
+
 ## Importer les listes complètes des mods
 
 Dans le dock, clique sur **Importer des mods (.jar)** et choisis le dossier `mods` de ton instance. Dans CurseForge, fais un clic droit sur le modpack puis « Open Folder » pour le trouver.

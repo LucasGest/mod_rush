@@ -102,6 +102,7 @@
         <label class="btn">Choisir des .jar<input type="file" id="impFiles" accept=".jar" multiple hidden></label>
       </div>
     </div>
+    <div class="row" id="packRow" hidden><button class="btn" id="btnPack" type="button">Charger le modpack <span id="packName"></span> intégré au site</button></div>
     <div class="log" id="impLog" hidden></div>
     <div class="row"><button class="btn" id="impClose" type="button">Fermer</button></div>
   </form>
@@ -111,7 +112,7 @@
 <script>
 let state = loadState();
 let mods = parse(state.text);
-let spinning=false, tickTimer=null, soundHere=false, stripPos=0, filterText="";
+let spinning=false, tickTimer=null, soundHere=false, stripPos=0, filterText="", removeMode=false;
 
 /* ---------- roulette ---------- */
 function rebuildReel(){
@@ -212,8 +213,10 @@ function renderBoard(){
       <div class="xpbar" role="progressbar" aria-valuemin="0" aria-valuemax="${tot}" aria-valuenow="${got}"><div class="xpfill" style="width:${got/tot*100}%"></div><span class="xplvl">${pct}%</span></div>
     </div>
     ${r.finished?`<div class="win">Mod complété en ${fmt(r.elapsed)} !</div>`:""}
-    <div class="filter"><input id="flt" type="search" placeholder="Chercher un objet…" value="${esc(filterText)}" aria-label="Chercher un objet"></div>
-    <div class="items">${list.map(n=>`<button type="button" class="item${r.checked.includes(n)?" ok":""}" data-n="${esc(n)}" aria-pressed="${r.checked.includes(n)}"><span class="slot">${iconHtml(mod.name,n)}</span><span class="n">${esc(n)}</span></button>`).join("")||`<div class="empty">Aucun objet ne correspond.</div>`}</div>`;
+    <div class="filter"><input id="flt" type="search" placeholder="Chercher un objet…" value="${esc(filterText)}" aria-label="Chercher un objet"><button type="button" class="btn${removeMode?" danger on":""}" id="btnRemove" aria-pressed="${removeMode}">${removeMode?"Terminer le retrait":"Retirer des objets"}</button></div>
+    ${removeMode?`<p class="hint">Clique sur un objet impossible à obtenir pour le retirer définitivement de la liste de ce mod.</p>`:""}
+    <div class="items${removeMode?" removing":""}">${list.map(n=>`<button type="button" class="item${r.checked.includes(n)?" ok":""}" data-n="${esc(n)}" aria-pressed="${r.checked.includes(n)}"><span class="slot">${iconHtml(mod.name,n)}</span><span class="n">${esc(n)}</span></button>`).join("")||`<div class="empty">Aucun objet ne correspond.</div>`}</div>`;
+  $("btnRemove").onclick=()=>{ removeMode=!removeMode; renderBoard(); };
   $("flt").addEventListener("input",e=>{ filterText=e.target.value; const pos=e.target.selectionStart; renderBoard(); const nf=$("flt"); nf.focus(); nf.setSelectionRange(pos,pos); });
 }
 function renderHist(){
@@ -236,6 +239,12 @@ $("dockUrl").textContent = new URL("./", location.href).href;
 
 /* ---------- import des .jar ---------- */
 const SKIP_NS=new Set(["minecraft","c","forge","neoforge","fabric","realms","quilt"]);
+/* librairies et utilitaires : pas de vrais objets à rusher */
+const LIBS=new Set(["titanium","irons_lib","sophisticatedcore","patchouli","guideme","modonomicon","moonlight","placebo","cucumber","curios","apothic_attributes","apothic_spawners","aces_spell_utils","jei","jade","emi","architectury","cloth_config","balm","bookshelf","prickle","resourcefullib","geckolib","azurelib","smartbrainlib","lionfishapi","owo","playeranimator","supermartijn642corelib","supermartijn642configlib","kotlinforforge","ftblibrary","polymorph","citadel"]);
+/* textes de lang qui ne sont pas des objets (infobulles, exemples) */
+const isNoise = l => l.length>48 || /[\[\]%{}]|\.$|^Example /.test(l);
+/* objets impossibles à obtenir en survie */
+const isUnobtainable = l => /\b(cr[ée]ati(f|ve|on)|creative)\b/i.test(l) || /verrouill|porte du trésor|^(Locked|Boss Doorway|Treasure Doorway)\b|^(Trapped|Locked) .*Stone|Stone .*piégée|Pierre .*piégée/i.test(l);
 function looseJson(txt){
   txt=txt.replace(/^﻿/,"");
   try{ return JSON.parse(txt); }catch(e){}
@@ -247,10 +256,15 @@ async function readJar(file, lang, skipEggs){
   const zip=await JSZip.loadAsync(file);
   const files=Object.keys(zip.files);
   // nom du mod
-  let name=null;
+  let name=null, modid=null;
   for(const p of ["META-INF/neoforge.mods.toml","META-INF/mods.toml"]){
-    if(zip.file(p)){ const t=await zip.file(p).async("string"); const m=t.match(/displayName\s*=\s*["']([^"'\n]+)["']/); if(m){ name=m[1].trim(); break; } }
+    if(zip.file(p)){
+      const t=await zip.file(p).async("string");
+      const m=t.match(/displayName\s*=\s*(?:"([^"\n]+)"|'([^'\n]+)')/); if(m && !name) name=(m[1]||m[2]).trim().replace(/\s+v?\d+(\.\d+)+$/,"");
+      const id=t.match(/^\s*modId\s*=\s*"([^"]+)"/m); if(id && !modid) modid=id[1];
+    }
   }
+  if(modid && LIBS.has(modid)) return {name:name||modid, items:[], icons:{}, lib:true};
   if(!name && zip.file("fabric.mod.json")){ try{ name=looseJson(await zip.file("fabric.mod.json").async("string")).name; }catch(e){} }
   if(!name) name=file.name.replace(/\.jar$/i,"").replace(/[-_ ]?(mc|neoforge|forge|fabric)?[-_ ]?\d[\w.+-]*$/i,"") || file.name;
   // espaces de noms qui ont un fichier de langue
@@ -271,7 +285,8 @@ async function readJar(file, lang, skipEggs){
     for(const [id,k] of ids){
       let label=(loc[k]||en[k]||id);
       if(typeof label!=="string") continue;
-      label=label.replace(/§./g,"").replace(/^#+/,"").trim(); if(!label) continue;
+      label=label.replace(/§./g,"").replace(/^#+/,"").trim();
+      if(!label || isNoise(label) || isUnobtainable(label)) continue;
       if(seen.has(label)) label=`${label} (${id})`;
       if(seen.has(label)) continue;
       seen.add(label); items.push(label);
@@ -311,8 +326,8 @@ async function importFiles(fileList){
     const f=jars[i];
     try{
       const r=await readJar(f, lang, skipEggs);
-      if(r.items.length){ found.push(r); line("ok",`[${i+1}/${jars.length}] ${r.name} : ${r.items.length} objets`); }
-      else{ skipped++; line("skip",`[${i+1}/${jars.length}] ${f.name} : aucun objet, ignoré`); }
+      if(r.items.length>=3){ found.push(r); line("ok",`[${i+1}/${jars.length}] ${r.name} : ${r.items.length} objets`); }
+      else{ skipped++; line("skip",`[${i+1}/${jars.length}] ${r.name||f.name} : ${r.lib?"librairie":"aucun objet"}, ignoré`); }
     }catch(e){ skipped++; line("err",`[${i+1}/${jars.length}] ${f.name} : illisible (${e.message||e})`); }
   }
   if(found.length){
@@ -342,7 +357,16 @@ $("btnAbandon").onclick=()=>{
   if(!b.dataset.confirm){ b.dataset.confirm="1"; b.textContent="Confirmer l'abandon"; setTimeout(()=>{delete b.dataset.confirm; renderClock();},3000); return; }
   delete b.dataset.confirm; endRun(false);
 };
-$("board").addEventListener("click",e=>{ const it=e.target.closest(".item"); if(it) toggleItem(it.dataset.n); });
+$("board").addEventListener("click",e=>{ const it=e.target.closest(".item"); if(!it) return; removeMode ? removeItem(it.dataset.n) : toggleItem(it.dataset.n); });
+function removeItem(name){
+  const r=state.run; if(!r) return;
+  const all=parse(state.text), mod=all.find(m=>m.name===r.mod); if(!mod) return;
+  mod.items=mod.items.filter(n=>n!==name);
+  r.checked=r.checked.filter(n=>n!==name);
+  state.text=serialize(all); mods=parse(state.text);
+  if(mod.items.length && r.checked.length>=mod.items.length && !r.finished){ save(); endRun(true); return; }
+  save(); renderBoard();
+}
 $("btnClearHist").onclick=()=>{ state.history=[]; save(); renderHist(); };
 $("btnSound").onclick=()=>{ soundHere=!soundHere; $("btnSound").textContent="Son ici : "+(soundHere?"on":"off"); $("btnSound").setAttribute("aria-pressed",soundHere); };
 
@@ -368,8 +392,28 @@ const drop=$("drop");
 ["dragleave","drop"].forEach(t=>drop.addEventListener(t,()=>drop.classList.remove("over")));
 drop.addEventListener("drop",async e=>{ e.preventDefault(); importFiles(await collectFromDrop(e.dataTransfer)); });
 
+/* modpack intégré au site (pack.json) : chargé automatiquement à la première ouverture */
+let PACK=null;
+async function fetchPack(){ try{ const r=await fetch("pack.json",{cache:"no-cache"}); if(r.ok) PACK=await r.json(); }catch(e){} return PACK; }
+async function applyPack(){
+  if(!PACK) return;
+  const log=$("impLog"); log.hidden=false; log.textContent="Chargement du modpack…";
+  await clearIcons();
+  for(const [m,map] of Object.entries(PACK.icons||{})) await saveIcons(m,map);
+  state.text=PACK.text; state.full=PACK.full||{}; state.run=null; state.history=[];
+  mods=parse(state.text); save(); rebuildReel(); render();
+  log.innerHTML=`<div class="ok">${mods.length} mods chargés (${mods.reduce((a,m)=>a+m.items.length,0)} objets).</div>`;
+  try{ localStorage.setItem("modrush.packLoaded", PACK.text.length+":"+hash(PACK.text)); }catch(e){}
+}
+$("btnPack").onclick=applyPack;
+
 (async()=>{
   await loadIcons();
+  if(await fetchPack()){
+    $("packRow").hidden=false; $("packName").textContent=PACK.name||"";
+    let done=null; try{ done=localStorage.getItem("modrush.packLoaded"); }catch(e){}
+    if(!done && !Object.keys(state.full).length) await applyPack();
+  }
   rebuildReel(); render();
   if(state.run && !state.run.finished) startTick();
 })();
