@@ -56,6 +56,16 @@ La liste de vérifications indique si tout est OK : dossier autorisé, monde tro
 - Un objet sorti d'une machine moddée sans être ramassé ni fabriqué peut ne pas être compté : coche-le à la main.
 - Si tu décoches un objet détecté, il ne sera recoché que si tu en obtiens un autre.
 
+### Commandes en jeu
+
+Une fois la détection active, tu peux piloter le dock depuis le chat de Minecraft, sans mod ni permission (cheats inutiles). Tape simplement le message :
+
+- `!roulette` lance la roulette (refusé si un rush est en cours) ;
+- `!abandon` abandonne le rush en cours ;
+- `!pause` met en pause ou relance le chrono.
+
+Le dock lit le chat dans `logs/latest.log` (réaction en 1 à 2 secondes). Seuls les messages du joueur connecté sur ce PC sont pris en compte, donc personne d'autre ne peut lancer ta roulette sur un serveur. Le message doit contenir uniquement la commande. La dernière commande reçue s'affiche dans la liste de vérifications.
+
 ### Mises à jour des mods
 
 Toutes les 30 secondes, le dock compare les `.jar` du dossier `mods` à la dernière lecture. Quand un mod est mis à jour ou ajouté, sa liste d'objets, ses icônes et ses identifiants sont relus et fusionnés. Les objets apparus sont ajoutés et ceux qui ont disparu du mod sont retirés. Les objets et les mods que tu as retirés toi-même (« Retirer des objets » ou « Modifier la liste ») ne reviennent pas. Un mod supprimé de l'instance est signalé, mais il reste dans la roulette jusqu'à ce que tu le retires.

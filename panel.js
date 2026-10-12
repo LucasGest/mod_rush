@@ -264,6 +264,55 @@ async function mergeJars(results, structMods=[]){
 /* après un import manuel ou le chargement du pack, la prochaine vérification relit tous les .jar */
 const resetJars=()=>idbDo("handles", st=>st.delete(JARS_KEY));
 
+/* ---------- commandes en jeu : « !roulette », « !abandon », « !pause » tapés dans le chat ----------
+   Minecraft écrit le chat dans logs/latest.log : aucun mod ni permission nécessaire.
+   Seul le joueur local (ligne « Setting user: … » du log) peut déclencher une commande. */
+const LOG_POLL_MS=1500, MAX_LOG_CHUNK=4*1024*1024;
+const CMD_RE=/\]: \[CHAT\] (?:\[[^\]]*\] )?<([^>]+)> !(roulette|abandon|pause)\s*$/i;
+let logTimer=null, logPos=-1, logHead="", logUser="", logBusy=false, cmdInfo={state:"", last:null};
+async function readLog(){
+  if(logBusy || !detDir) return;
+  logBusy=true;
+  try{
+    let f;
+    try{ f=await (await (await detDir.getDirectoryHandle("logs")).getFileHandle("latest.log")).getFile(); }
+    catch(e){ cmdInfo.state="nolog"; return; }
+    const head=new TextDecoder().decode(new Uint8Array(await f.slice(0,64).arrayBuffer()));
+    if(logPos<0){ // premier passage : on note le joueur et on ignore les anciennes lignes
+      const m=(await f.slice(0,Math.min(f.size,MAX_LOG_CHUNK)).text()).match(/Setting user: (\S+)/);
+      if(m) logUser=cleanText(m[1],40);
+      logPos=f.size; logHead=head; cmdInfo.state="ok"; return;
+    }
+    if(head!==logHead || f.size<logPos){ logPos=0; logHead=head; } // jeu relancé : nouveau fichier
+    cmdInfo.state="ok";
+    if(f.size===logPos) return;
+    const buf=new Uint8Array(await f.slice(logPos, Math.min(f.size, logPos+MAX_LOG_CHUNK)).arrayBuffer());
+    const end=buf.lastIndexOf(10); if(end<0) return; // on attend que la ligne soit complète
+    logPos+=end+1;
+    for(const line of new TextDecoder().decode(buf.subarray(0,end+1)).split("\n")){
+      const u=line.match(/Setting user: (\S+)/); if(u){ logUser=cleanText(u[1],40); continue; }
+      const m=line.match(CMD_RE);
+      if(m && (!logUser || m[1]===logUser)) runCmd(m[2].toLowerCase());
+    }
+  }catch(e){ cmdInfo.state = e && e.name==="NotAllowedError" ? "perm" : "err"; }
+  finally{ logBusy=false; renderDetect(); }
+}
+function runCmd(cmd){
+  const r=state.run, active=r && !r.finished;
+  let msg="";
+  if(cmd==="roulette"){
+    if(spinning) msg="ignorée : la roulette tourne déjà";
+    else if(active) msg="ignorée : rush en cours, tape !abandon d'abord";
+    else if(!mods.length) msg="ignorée : aucun mod dans la liste";
+    else{ draw(); msg="roulette lancée"; }
+  }else if(cmd==="abandon"){
+    if(active){ endRun(false); msg="rush abandonné"; } else msg="ignorée : aucun rush en cours";
+  }else if(cmd==="pause"){
+    if(active){ togglePause(); msg=state.run.paused?"chrono en pause":"chrono relancé"; } else msg="ignorée : aucun rush en cours";
+  }
+  cmdInfo.last={cmd, msg, at:Date.now()};
+}
+
 const ago=ms=>{ const s=Math.max(0,Math.round(ms/1000)); return s<60?`${s} s`:s<3600?`${Math.round(s/60)} min`:`${Math.round(s/3600)} h`; };
 function renderDetect(){
   const C=[], add=(lvl,txt,sub)=>C.push({lvl,txt,sub});
@@ -295,6 +344,12 @@ function renderDetect(){
       add("ok", J.changes.length?"Mods mis à jour":"Mods à jour", (J.changes.length ? sum+". " : `${J.count} fichiers .jar suivis. `)+when);
     }
   }
+  if(active){
+    const L=cmdInfo.last, lastTxt=L && Date.now()-L.at<10*60*1000 ? ` Dernière : !${L.cmd} (${L.msg}) il y a ${ago(Date.now()-L.at)}.` : "";
+    if(cmdInfo.state==="nolog") add("warn-c","Commandes en jeu indisponibles","Dossier logs introuvable : choisis le dossier de l'instance (celui qui contient logs, mods et saves).");
+    else if(cmdInfo.state==="err" || cmdInfo.state==="perm") add("ko","Commandes en jeu : log illisible","Nouvel essai dans quelques secondes.");
+    else if(cmdInfo.state==="ok") add("ok","Commandes en jeu actives",`Tape !roulette, !abandon ou !pause dans le chat${logUser?` (joueur ${logUser})`:""}.${lastTxt}`);
+  }
   if(!r || r.finished) add("wait","En attente d'un rush","Les objets seront cochés dès qu'un mod est tiré.");
   else if(mod){
     const n=ids ? mod.items.filter(x=>ids[x]).length : 0;
@@ -312,10 +367,11 @@ function renderDetect(){
   $("btnDetectStop").hidden=!detDir;
 }
 async function startDetect(h){
-  detDir=h; clearInterval(detTimer); clearInterval(jarTimer); detErr=""; jarInfo={state:"", count:0, changes:[], missing:[]};
+  detDir=h; clearInterval(detTimer); clearInterval(jarTimer); clearInterval(logTimer); detErr=""; jarInfo={state:"", count:0, changes:[], missing:[]};
   try{ detPerm=await h.queryPermission({mode:"read"}); }catch(e){ detPerm="granted"; }
   if(detPerm==="granted"){
     await readStats(); detTimer=setInterval(readStats, POLL_MS);
+    logPos=-1; cmdInfo={state:"", last:null}; await readLog(); logTimer=setInterval(readLog, LOG_POLL_MS);
     scanJars(); jarTimer=setInterval(scanJars, JAR_POLL_MS);
   }
   renderDetect();
@@ -328,7 +384,7 @@ $("btnDetect").onclick=async()=>{
     SNAP=null; await startDetect(h);
   }catch(e){ if(!e || e.name!=="AbortError"){ detErr="pick"; renderDetect(); } }
 };
-$("btnDetectStop").onclick=async()=>{ clearInterval(detTimer); clearInterval(jarTimer); detTimer=jarTimer=null; detDir=null; detPerm=""; SNAP=null; detErr=""; await idbDo("handles", st=>st.delete("saves")); renderDetect(); };
+$("btnDetectStop").onclick=async()=>{ clearInterval(detTimer); clearInterval(jarTimer); clearInterval(logTimer); detTimer=jarTimer=logTimer=null; detDir=null; detPerm=""; SNAP=null; detErr=""; await idbDo("handles", st=>st.delete("saves")); renderDetect(); };
 setInterval(()=>{ if(!detTimer) renderDetect(); },5000);
 
 /* ---------- état de l'overlay ---------- */
