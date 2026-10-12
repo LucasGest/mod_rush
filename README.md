@@ -38,6 +38,13 @@ Le fichier `pack.json` contient les listes complètes et les icônes des 33 mods
 
 En haut du dock, « Mis à jour le … » donne la date de la version du site. Si elle ne change pas après une mise en ligne, actualise le dock dans OBS. Pense à changer `SITE_UPDATED` dans `common.js` à chaque mise en ligne.
 
+## Gérer les mods de la roue
+
+Le bouton **Gérer les mods** liste tous les mods avec leur nombre d'objets. Coche ou décoche un mod pour le mettre dans la roue ou l'en sortir, sans rien supprimer.
+
+- **Objets max par mod** (500 par défaut) : les mods plus gros sortent de la roue, car leur rush serait interminable (Chipped, Quark…). Coche l'un d'eux pour le garder malgré la limite. Mets 0 pour ne pas avoir de limite.
+- **Exporter ma progression** enregistre dans un fichier la liste, les réglages de la roue et l'historique des rushs. **Importer une sauvegarde** les restaure, par exemple après avoir vidé le cache d'OBS ou en changeant de PC.
+
 Pendant un rush, le bouton **Retirer des objets** permet de supprimer définitivement d'un clic un objet impossible à obtenir en survie.
 
 ## Détection automatique depuis Minecraft
@@ -61,6 +68,7 @@ La liste de vérifications indique si tout est OK : dossier autorisé, monde tro
 Une fois la détection active, tu peux piloter le dock depuis le chat de Minecraft, sans mod ni permission (cheats inutiles). Tape simplement le message :
 
 - `!roulette` lance la roulette (refusé si un rush est en cours) ;
+- `!reroll` abandonne le rush en cours et relance aussitôt la roulette ;
 - `!abandon` abandonne le rush en cours ;
 - `!pause` met en pause ou relance le chrono.
 

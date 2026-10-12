@@ -1,25 +1,26 @@
 let state = loadState();
 let mods = parse(state.text);
+let wheel=[]; // mods dans la roue (voir inWheel)
 let spinning=false, tickTimer=null, soundHere=false, stripPos=0, filterText="", removeMode=false;
 
 /* ---------- roulette ---------- */
 function rebuildReel(){
-  const names = mods.length ? mods.map(m=>m.name) : ["Aucun mod"];
+  wheel = wheelMods(mods, state.wheel);
+  const names = wheel.length ? wheel.map(m=>m.name) : ["Aucun mod"];
   buildReel($("strip"), names);
-  const idx = state.run ? Math.max(0, mods.findIndex(m=>m.name===state.run.mod)) : 0;
+  const idx = state.run ? Math.max(0, wheel.findIndex(m=>m.name===state.run.mod)) : 0;
   stripPos = names.length*2 + idx; setReel($("strip"), stripPos);
-  const full=mods.filter(m=>state.full[m.name]).length;
-  $("poolInfo").textContent = `${mods.length} mod${mods.length>1?"s":""}${full?` · ${full} complet${full>1?"s":""}`:""}`;
+  $("poolInfo").textContent = `${wheel.length} mod${wheel.length>1?"s":""} dans la roue${wheel.length<mods.length?` / ${mods.length}`:""}`;
 }
 function eligible(){
   const done = new Set(state.history.filter(h=>h.done).map(h=>h.mod));
-  let pool = mods.map((m,i)=>i);
-  if($("optNoRepeat").checked){ const f=pool.filter(i=>!done.has(mods[i].name)); if(f.length) pool=f; }
-  if(pool.length>1 && state.run) pool = pool.filter(i=>mods[i].name!==state.run.mod);
+  let pool = wheel.map((m,i)=>i);
+  if($("optNoRepeat").checked){ const f=pool.filter(i=>!done.has(wheel[i].name)); if(f.length) pool=f; }
+  if(pool.length>1 && state.run) pool = pool.filter(i=>wheel[i].name!==state.run.mod);
   return pool;
 }
 function draw(){
-  if(spinning || !mods.length) return;
+  if(spinning || !wheel.length) return;
   const b=$("btnDraw");
   if(state.run && !state.run.finished){
     if(!b.dataset.confirm){
@@ -29,15 +30,15 @@ function draw(){
     }
     delete b.dataset.confirm; endRun(false);
   }
-  const pool=eligible(), pick=pool[Math.floor(Math.random()*pool.length)], n=mods.length;
-  const spin={ id:Date.now(), start: stripPos % n + n*2, target: n*(reelRepeat(n)-3)+pick, at: Date.now()+120, dur:4200, mod: mods[pick].name };
+  const pool=eligible(), pick=pool[Math.floor(Math.random()*pool.length)], n=wheel.length, picked=wheel[pick];
+  const spin={ id:Date.now(), start: stripPos % n + n*2, target: n*(reelRepeat(n)-3)+pick, at: Date.now()+120, dur:4200, mod: picked.name };
   state.spin=spin; state.run=null; saveState(state);
   spinning=true; refreshDrawBtn(); renderBoard(); renderClock();
-  playSpin($("strip"), spin, { sound: soundHere, onDone(){ stripPos=spin.target; spinning=false; startRun(mods[pick]); } });
+  playSpin($("strip"), spin, { sound: soundHere, onDone(){ stripPos=spin.target; spinning=false; startRun(picked); } });
 }
 function refreshDrawBtn(){
   const b=$("btnDraw");
-  b.disabled = spinning || !mods.length;
+  b.disabled = spinning || !wheel.length;
   b.textContent = spinning ? "Ça tourne…" : (state.run && !state.run.finished ? "Retirer un autre mod" : "Tirer un mod");
 }
 
@@ -268,7 +269,7 @@ const resetJars=()=>idbDo("handles", st=>st.delete(JARS_KEY));
    Minecraft écrit le chat dans logs/latest.log : aucun mod ni permission nécessaire.
    Seul le joueur local (ligne « Setting user: … » du log) peut déclencher une commande. */
 const LOG_POLL_MS=1500, MAX_LOG_CHUNK=4*1024*1024;
-const CMD_RE=/\]: \[CHAT\] (?:\[[^\]]*\] )?<([^>]+)> !(roulette|abandon|pause)\s*$/i;
+const CMD_RE=/\]: \[CHAT\] (?:\[[^\]]*\] )?<([^>]+)> !(roulette|reroll|abandon|pause)\s*$/i;
 let logTimer=null, logPos=-1, logHead="", logUser="", logBusy=false, cmdInfo={state:"", last:null};
 async function readLog(){
   if(logBusy || !detDir) return;
@@ -303,8 +304,12 @@ function runCmd(cmd){
   if(cmd==="roulette"){
     if(spinning) msg="ignorée : la roulette tourne déjà";
     else if(active) msg="ignorée : rush en cours, tape !abandon d'abord";
-    else if(!mods.length) msg="ignorée : aucun mod dans la liste";
+    else if(!wheel.length) msg="ignorée : aucun mod dans la roue";
     else{ draw(); msg="roulette lancée"; }
+  }else if(cmd==="reroll"){
+    if(spinning) msg="ignorée : la roulette tourne déjà";
+    else if(!wheel.length) msg="ignorée : aucun mod dans la roue";
+    else{ if(active) endRun(false); draw(); msg=active?"rush abandonné, roulette relancée":"roulette lancée"; }
   }else if(cmd==="abandon"){
     if(active){ endRun(false); msg="rush abandonné"; } else msg="ignorée : aucun rush en cours";
   }else if(cmd==="pause"){
@@ -348,7 +353,7 @@ function renderDetect(){
     const L=cmdInfo.last, lastTxt=L && Date.now()-L.at<10*60*1000 ? ` Dernière : !${L.cmd} (${L.msg}) il y a ${ago(Date.now()-L.at)}.` : "";
     if(cmdInfo.state==="nolog") add("warn-c","Commandes en jeu indisponibles","Dossier logs introuvable : choisis le dossier de l'instance (celui qui contient logs, mods et saves).");
     else if(cmdInfo.state==="err" || cmdInfo.state==="perm") add("ko","Commandes en jeu : log illisible","Nouvel essai dans quelques secondes.");
-    else if(cmdInfo.state==="ok") add("ok","Commandes en jeu actives",`Tape !roulette, !abandon ou !pause dans le chat${logUser?` (joueur ${logUser})`:""}.${lastTxt}`);
+    else if(cmdInfo.state==="ok") add("ok","Commandes en jeu actives",`Tape !roulette, !reroll, !abandon ou !pause dans le chat${logUser?` (joueur ${logUser})`:""}.${lastTxt}`);
   }
   if(!r || r.finished) add("wait","En attente d'un rush","Les objets seront cochés dès qu'un mod est tiré.");
   else if(mod){
@@ -365,6 +370,7 @@ function renderDetect(){
   $("btnDetect").textContent=detDir && detPerm!=="granted" ? "Réactiver la détection" : detDir ? "Changer de dossier" : "Choisir le dossier de l'instance";
   $("btnDetect").disabled=!FS_OK;
   $("btnDetectStop").hidden=!detDir;
+  $("detWarn").hidden=!(FS_OK && detDir && detPerm && detPerm!=="granted");
 }
 async function startDetect(h){
   detDir=h; clearInterval(detTimer); clearInterval(jarTimer); clearInterval(logTimer); detErr=""; jarInfo={state:"", count:0, changes:[], missing:[]};
@@ -386,6 +392,7 @@ $("btnDetect").onclick=async()=>{
 };
 $("btnDetectStop").onclick=async()=>{ clearInterval(detTimer); clearInterval(jarTimer); clearInterval(logTimer); detTimer=jarTimer=logTimer=null; detDir=null; detPerm=""; SNAP=null; detErr=""; await idbDo("handles", st=>st.delete("saves")); renderDetect(); };
 setInterval(()=>{ if(!detTimer) renderDetect(); },5000);
+$("btnDetWarn").onclick=()=>$("btnDetect").onclick(); // même clic : l'autorisation reste possible
 
 /* ---------- état de l'overlay ---------- */
 setInterval(()=>{
@@ -558,7 +565,6 @@ $("btnSound").onclick=()=>{ soundHere=!soundHere; $("btnSound").textContent="Son
 const dlg=$("dlg");
 $("btnEdit").onclick=()=>{ $("txt").value=state.text; $("msg").textContent=""; dlg.showModal(); };
 $("btnCancel").onclick=()=>dlg.close();
-$("btnReset").onclick=()=>{ $("txt").value=SAMPLE; $("msg").className="msg"; $("msg").textContent="Exemples remis. Clique sur Enregistrer pour valider."; };
 $("btnSave").onclick=()=>{
   const parsed=parse($("txt").value), m=$("msg");
   if(!parsed.length){ m.className="msg err"; m.textContent="Aucun mod trouvé. Commence une section par « # Nom du mod » puis un objet par ligne."; return; }
@@ -587,6 +593,64 @@ const drop=$("drop");
 ["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{ e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave","drop"].forEach(t=>drop.addEventListener(t,()=>drop.classList.remove("over")));
 drop.addEventListener("drop",async e=>{ e.preventDefault(); importFiles(await collectFromDrop(e.dataTransfer)); });
+
+/* ---------- gestionnaire de mods : qui va dans la roue ---------- */
+const mgr=$("mgr");
+function renderMgr(){
+  const w=state.wheel, q=$("mgrFlt").value.trim().toLowerCase();
+  if(document.activeElement!==$("mgrMax")) $("mgrMax").value=w.max;
+  const n=mods.filter(m=>inWheel(m,w)).length;
+  $("mgrInfo").textContent=`${n} mod${n>1?"s":""} dans la roue sur ${mods.length}.`;
+  const list=mods.filter(m=>!q || m.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name,"fr"));
+  $("mgrList").innerHTML=list.map(m=>{
+    const on=inWheel(m,w), big=w.max && m.items.length>w.max;
+    const note=big ? (on?" · gardé malgré la limite":" · trop d'objets") : w.off.includes(m.name) ? " · retiré" : "";
+    return `<li class="${on?"":"off"}"><label><input type="checkbox" data-m="${esc(m.name)}"${on?" checked":""}><span class="nm">${esc(m.name)}</span><span class="cnt${big?" big":""}">${m.items.length} objets${note}</span></label></li>`;
+  }).join("") || `<li><span class="opt" style="padding:8px 10px">Aucun mod ne correspond.</span></li>`;
+}
+function wheelChanged(){ save(); rebuildReel(); refreshDrawBtn(); renderMgr(); }
+$("mgrList").addEventListener("change",e=>{
+  const c=e.target.closest("input[data-m]"); if(!c) return;
+  const name=c.dataset.m, w=state.wheel, m=mods.find(x=>x.name===name); if(!m) return;
+  w.off=w.off.filter(x=>x!==name); w.on=w.on.filter(x=>x!==name);
+  if(!c.checked) w.off.push(name);
+  else if(w.max && m.items.length>w.max) w.on.push(name); // coché malgré la limite
+  wheelChanged();
+});
+$("mgrMax").onchange=()=>{ state.wheel.max=Math.max(0,Math.min(100000,parseInt($("mgrMax").value,10)||0)); wheelChanged(); };
+$("mgrFlt").oninput=renderMgr;
+$("btnMgr").onclick=()=>{ $("mgrFlt").value=""; renderMgr(); mgr.showModal(); };
+$("mgrClose").onclick=()=>mgr.close();
+
+/* ---------- sauvegarde de la progression dans un fichier (si le cache d'OBS est vidé) ---------- */
+const SAVE_KEYS=["text","full","removed","hiddenMods","wheel","history","run"];
+$("btnExport").onclick=async()=>{
+  const data=JSON.stringify({app:"modrush", version:1, at:Date.now(), state:Object.fromEntries(SAVE_KEYS.map(k=>[k,state[k]]))});
+  const name=`modrush-sauvegarde-${new Date().toISOString().slice(0,10)}.json`;
+  try{
+    if(typeof window.showSaveFilePicker==="function"){
+      const h=await window.showSaveFilePicker({suggestedName:name, types:[{description:"Sauvegarde Mod Rush", accept:{"application/json":[".json"]}}]});
+      const out=await h.createWritable(); await out.write(data); await out.close();
+    }else{
+      const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([data],{type:"application/json"})); a.download=name; a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    }
+    $("mgrInfo").textContent="Progression exportée.";
+  }catch(e){ if(!e || e.name!=="AbortError") $("mgrInfo").textContent="Export impossible : "+(e && e.message || e); }
+};
+$("impSave").onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  try{
+    if(f.size>MAX_TEXT*2) throw new Error("fichier trop gros");
+    const j=JSON.parse(await f.text());
+    if(!isObj(j) || j.app!=="modrush" || !isObj(j.state)) throw new Error("ce n'est pas une sauvegarde Mod Rush");
+    const s=cleanState(Object.assign({}, j.state, {spin:null, event:null}));
+    if(!parse(s.text).length) throw new Error("la sauvegarde ne contient aucun mod");
+    state=s; mods=parse(state.text); save(); rebuildReel(); render(); renderMgr();
+    if(state.run && !state.run.finished) startTick();
+    $("mgrInfo").textContent=`Sauvegarde importée : ${mods.length} mods, ${state.history.length} rushs dans l'historique.`;
+  }catch(err){ $("mgrInfo").textContent="Import impossible : "+(err && err.message || err); }
+};
 
 /* modpack intégré au site (pack.json) : chargé automatiquement à la première ouverture */
 let PACK=null;

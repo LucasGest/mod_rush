@@ -70,8 +70,9 @@ setInterval(renderTime,250);
 
 function handle(s){
   state=s;
-  const key=state.text.length+":"+hash(state.text);
-  if(key!==namesKey){ namesKey=key; mods=parse(state.text); buildReel($("strip"), mods.length?mods.map(m=>m.name):["Aucun mod"]); }
+  // même roue que le dock (mêmes mods, même ordre) pour que l'animation tombe sur le mod tiré
+  const key=state.text.length+":"+hash(state.text)+":"+hash(JSON.stringify(state.wheel));
+  if(key!==namesKey){ namesKey=key; mods=parse(state.text); const w=wheelMods(mods,state.wheel); buildReel($("strip"), w.length?w.map(m=>m.name):["Aucun mod"]); }
   const sp=state.spin;
   if(sp && sp.id!==seenSpin){
     seenSpin=sp.id;

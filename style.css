@@ -136,3 +136,18 @@ canvas#fx{position:fixed;inset:0;pointer-events:none;z-index:50;width:100%;heigh
 .checks small{display:block;color:var(--muted);font-size:12px}
 .dot.mid{background:var(--gold)}
 .item .auto{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--xp);border:1px solid #4f8a25;padding:1px 4px}
+
+/* gestionnaire de mods */
+.dlg input[type=number],.dlg input[type=search]{background:#0e100f;color:var(--fg);border:2px solid var(--line);font:inherit;font-size:14px;padding:6px 8px}
+.dlg input[type=number]{width:90px}
+.mgr-list{list-style:none;margin:0;padding:0;max-height:min(50vh,420px);overflow:auto;border:2px solid var(--line);background:#0e100f}
+.mgr-list li+li{border-top:1px solid var(--line)}
+.mgr-list label{display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;min-width:0}
+.mgr-list label:hover{background:var(--panel-2)}
+.mgr-list input{accent-color:var(--gold);width:16px;height:16px;flex:0 0 auto}
+.mgr-list .nm{flex:1;min-width:0;overflow-wrap:anywhere}
+.mgr-list .cnt{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
+.mgr-list .cnt.big{color:var(--gold)}
+.mgr-list .off .nm{color:var(--muted)}
+#detWarn{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+#detWarn[hidden]{display:none}

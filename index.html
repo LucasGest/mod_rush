@@ -20,10 +20,16 @@
       <span class="status" title="L'overlay doit être ouvert dans OBS"><span class="dot" id="hbDot"></span><span id="hbTxt">overlay non détecté</span></span>
       <span class="status" title="Lecture des statistiques du monde Minecraft"><span class="dot" id="gameDot"></span><span id="gameTxt">jeu non suivi</span></span>
       <button class="btn" id="btnImport" type="button">Importer des mods (.jar)</button>
+      <button class="btn" id="btnMgr" type="button">Gérer les mods</button>
       <button class="btn" id="btnEdit" type="button">Modifier la liste</button>
       <button class="btn" id="btnSound" type="button" aria-pressed="false">Son ici : off</button>
     </div>
   </header>
+
+  <div class="warn" id="detWarn" hidden>
+    <b>Détection en pause.</b> Après un redémarrage d'OBS, l'accès au dossier du jeu doit être autorisé de nouveau : les objets ne se cochent plus et les commandes en jeu ne répondent pas.
+    <button class="btn" id="btnDetWarn" type="button">Réactiver la détection</button>
+  </div>
 
   <div class="warn" id="obsWarn" hidden>
     <b>Ce panneau est ouvert hors d'OBS.</b> L'overlay dans OBS ne verra pas ce que tu fais ici, car OBS et ton navigateur ne partagent pas leurs données.
@@ -74,7 +80,7 @@
         <div class="links">
           <span>Source navigateur (1920 × 1080 conseillé, s'adapte à toute taille) :</span>
           <code id="ovUrl"></code>
-          <span>Options : <code>?pos=br</code> (bl, br, tl, tr), <code>&amp;sound=0</code>, <code>&amp;scale=1.2</code></span>
+          <span>Options : <code>?pos=br</code> (bl, br, tl, tr), <code>&amp;sound=0</code>, <code>&amp;scale=1.2</code>, <code>&amp;ticker=0</code> (sans bandeau), <code>&amp;speed=120</code> (vitesse du bandeau)</span>
         </div>
       </section>
     </div>
@@ -94,7 +100,6 @@
     <div class="row">
       <button class="btn primary" id="btnSave" type="button" style="font-size:16px;padding:10px 18px">Enregistrer</button>
       <button class="btn" id="btnCancel" type="button">Annuler</button>
-      <button class="btn danger" id="btnReset" type="button">Remettre les exemples</button>
     </div>
   </form>
 </dialog>
@@ -120,6 +125,25 @@
     <div class="row" id="packRow" hidden><button class="btn" id="btnPack" type="button">Charger le modpack <span id="packName"></span> intégré au site</button></div>
     <div class="log" id="impLog" hidden></div>
     <div class="row"><button class="btn" id="impClose" type="button">Fermer</button></div>
+  </form>
+</dialog>
+
+<dialog id="mgr">
+  <form class="dlg" method="dialog">
+    <h2>Gérer les mods</h2>
+    <p>Coche les mods qui vont dans la roue. Les mods qui ont plus d'objets que la limite en sortent automatiquement, sauf si tu les coches toi-même.</p>
+    <div class="fields">
+      <label class="opt">Objets max par mod <input type="number" id="mgrMax" min="0" step="50" aria-describedby="mgrMaxHint"></label>
+      <span class="opt" id="mgrMaxHint">0 = sans limite</span>
+      <input type="search" id="mgrFlt" placeholder="Chercher un mod…" aria-label="Chercher un mod">
+    </div>
+    <div class="msg" id="mgrInfo" aria-live="polite"></div>
+    <ul class="mgr-list" id="mgrList"></ul>
+    <div class="row">
+      <button class="btn primary" id="mgrClose" type="button">Fermer</button>
+      <button class="btn" id="btnExport" type="button">Exporter ma progression</button>
+      <label class="btn">Importer une sauvegarde<input type="file" id="impSave" accept=".json,application/json" hidden></label>
+    </div>
   </form>
 </dialog>
 
