@@ -187,6 +187,7 @@ function rebaseItem(r, name){
 
 /* ---------- mises à jour des mods : compare les .jar du dossier mods à la dernière lecture ----------
    Empreinte d'un .jar = taille + date de modification. Un .jar nouveau ou modifié est relu et sa liste fusionnée. */
+const JARS_KEY="jars.v2"; // changer la clé force une relecture de tous les .jar (nouvelles règles de tri)
 let jarBusy=false, jarInfo={state:"", count:0, changes:[], missing:[]};
 async function scanJars(){
   if(jarBusy || !detDir || spinning) return; // pas de reconstruction de la roulette pendant un tirage
@@ -194,7 +195,7 @@ async function scanJars(){
   if(typeof JSZip==="undefined"){ jarInfo.state="err"; renderDetect(); return; }
   jarBusy=true;
   try{
-    const known=(await idbGet("handles","jars"))||{}, now={}, todo=[];
+    const known=(await idbGet("handles",JARS_KEY))||{}, now={}, todo=[];
     for await (const h of modsDir.values()){
       if(h.kind!=="file" || !/\.jar$/i.test(h.name)) continue;
       const f=await h.getFile(), fp=f.size+":"+f.lastModified, k=known[h.name];
@@ -202,24 +203,30 @@ async function scanJars(){
     }
     jarInfo.count=Object.keys(now).length+todo.length;
     if(todo.length){ jarInfo.state="scan"; jarInfo.todo=todo.length; renderDetect(); }
-    const lang=$("impLang").value, skipEggs=$("impEggs").checked, results=[];
+    const lang=$("impLang").value, skipEggs=$("impEggs").checked, results=[], structMods=[];
     for(const t of todo){
       let r=null; try{ r=await readJar(t.f, lang, skipEggs); }catch(e){}
       now[t.h.name]={fp:t.fp, mod: r && r.items.length>=3 ? r.name : null};
       if(r && r.items.length>=3) results.push(r);
+      if(r && r.structures) structMods.push(r.name);
     }
-    const changes=results.length ? await mergeJars(results) : [];
+    const changes=results.length||structMods.length ? await mergeJars(results, structMods) : [];
     const present=new Set(Object.values(now).map(x=>x.mod).filter(Boolean));
     jarInfo.missing=[...new Set(Object.values(known).map(x=>x.mod).filter(m=>m && !present.has(m)))];
     if(changes.length) jarInfo.changes=changes;
     jarInfo.state="ok";
-    await idbDo("handles", st=>st.put(now,"jars"));
+    await idbDo("handles", st=>st.put(now,JARS_KEY));
   }catch(e){ jarInfo.state = e && e.name==="NotAllowedError" ? "perm" : "err"; }
   jarBusy=false; renderDetect();
 }
 /* fusionne les listes relues dans la liste actuelle ; renvoie un résumé des changements */
-async function mergeJars(results){
+async function mergeJars(results, structMods=[]){
   const list=parse(state.text), changes=[];
+  // mods de structures ajoutés auparavant : on les sort de la roulette (sauf s'ils sont en cours de rush)
+  for(const name of structMods){
+    const i=list.findIndex(x=>x.name===name);
+    if(i>=0 && state.full[name] && !(state.run && state.run.mod===name)){ list.splice(i,1); delete state.full[name]; changes.push({mod:name, structures:true}); }
+  }
   for(const r of results){
     const m=list.find(x=>x.name===r.name);
     if(!m && state.hiddenMods.includes(r.name)) continue; // mod retiré volontairement de la roulette
@@ -245,7 +252,7 @@ async function mergeJars(results){
   return changes;
 }
 /* après un import manuel ou le chargement du pack, la prochaine vérification relit tous les .jar */
-const resetJars=()=>idbDo("handles", st=>st.delete("jars"));
+const resetJars=()=>idbDo("handles", st=>st.delete(JARS_KEY));
 
 const ago=ms=>{ const s=Math.max(0,Math.round(ms/1000)); return s<60?`${s} s`:s<3600?`${Math.round(s/60)} min`:`${Math.round(s/3600)} h`; };
 function renderDetect(){
@@ -267,7 +274,7 @@ function renderDetect(){
       if(age<STALE_MS) add("ok","Statistiques à jour",`Dernière sauvegarde du jeu il y a ${ago(age)}.`);
       else add("warn-c","Pas de sauvegarde récente",`Dernière il y a ${ago(age)}. Le jeu est-il lancé sur ce monde ? Minecraft sauvegarde toutes les 5 min.`);
     }else add("wait","Recherche du monde…");
-    const J=jarInfo, sum=J.changes.map(c=>c.isNew?`nouveau mod ${c.mod} (${c.added} objets)`:`${c.mod} : +${c.added} / −${c.gone}`).join(" · ");
+    const J=jarInfo, sum=J.changes.map(c=>c.structures?`${c.mod} retiré (mod de structures)`:c.isNew?`nouveau mod ${c.mod} (${c.added} objets)`:`${c.mod} : +${c.added} / −${c.gone}`).join(" · ");
     if(J.state==="nomods") add("warn-c","Dossier mods introuvable","Pour suivre les mises à jour des mods, choisis le dossier de l'instance (celui qui contient mods et saves).");
     else if(J.state==="scan") add("wait",`Lecture de ${J.todo} mod${J.todo>1?"s":""} nouveau${J.todo>1?"x":""} ou mis à jour…`);
     else if(J.state==="err" || J.state==="perm") add("ko","Mods illisibles","Impossible de lire le dossier mods. Nouvel essai dans 30 s.");
@@ -339,7 +346,7 @@ function looseJson(txt){
 /* blocs qui n'existent pas en objet (pots, variantes murales) */
 const isBlockOnly = id => /^potted_/.test(id) || /(^|_)wall_(torch|sign|hanging_sign|banner|head|skull|fan)$/.test(id);
 /* limites contre les archives piégées (zip bombs) et les fichiers démesurés */
-const MAX_JAR=300*1024*1024, MAX_JARS=1500, MAX_META=1024*1024, MAX_LANG=8*1024*1024, MAX_PNG=64*1024, MAX_ITEMS=5000;
+const MIN_STRUCT_ITEMS=10, MAX_JAR=300*1024*1024, MAX_JARS=1500, MAX_META=1024*1024, MAX_LANG=8*1024*1024, MAX_PNG=64*1024, MAX_ITEMS=5000;
 const unzSize = f => f && f._data && typeof f._data.uncompressedSize==="number" ? f._data.uncompressedSize : Infinity;
 /* renvoie le fichier de l'archive seulement s'il existe et ne dépasse pas max octets une fois décompressé */
 const zfile = (zip, p, max) => { const f=zip.file(p); return f && unzSize(f)<=max ? f : null; };
@@ -393,6 +400,8 @@ async function readJar(file, lang, skipEggs){
       }
     }
   }
+  // mod de génération de structures : quelques objets annexes au plus, rien à rusher
+  if(items.length<MIN_STRUCT_ITEMS && files.some(p=>/^data\/[^/]+\/worldgen\/structure\/.+\.json$/.test(p))) return {name, items:[], icons:{}, ids:{}, structures:true};
   return {name, items, icons, ids:itemIds};
 }
 async function collectFromDrop(dt){
@@ -425,7 +434,7 @@ async function importFiles(fileList){
     try{
       const r=await readJar(f, lang, skipEggs);
       if(r.items.length>=3){ found.push(r); line("ok",`[${i+1}/${jars.length}] ${r.name} : ${r.items.length} objets`); }
-      else{ skipped++; line("skip",`[${i+1}/${jars.length}] ${r.name||f.name} : ${r.lib?"librairie":"aucun objet"}, ignoré`); }
+      else{ skipped++; line("skip",`[${i+1}/${jars.length}] ${r.name||f.name} : ${r.structures?"mod de structures":r.lib?"librairie":"aucun objet"}, ignoré`); }
     }catch(e){ skipped++; line("err",`[${i+1}/${jars.length}] ${f.name} : illisible (${e.message||e})`); }
   }
   if(found.length){

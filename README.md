@@ -58,6 +58,8 @@ La liste de vérifications indique si tout est OK : dossier autorisé, monde tro
 
 Toutes les 30 secondes, le dock compare les `.jar` du dossier `mods` à la dernière lecture. Quand un mod est mis à jour ou ajouté, sa liste d'objets, ses icônes et ses identifiants sont relus et fusionnés. Les objets apparus sont ajoutés et ceux qui ont disparu du mod sont retirés. Les objets et les mods que tu as retirés toi-même (« Retirer des objets » ou « Modifier la liste ») ne reviennent pas. Un mod supprimé de l'instance est signalé, mais il reste dans la roulette jusqu'à ce que tu le retires.
 
+Ne vont pas dans la roulette : les librairies, les mods qui ont moins de 3 objets, et les **mods de structures**, c'est-à-dire ceux qui génèrent des structures et ont moins de 10 objets (Towns and Towers par exemple). Les mods d'aventure qui ont aussi des structures (Twilight Forest, Aether…) restent, car ils ont beaucoup d'objets. Pour retirer un autre mod, supprime sa section dans « Modifier la liste » : il ne reviendra pas.
+
 ## Importer les listes complètes des mods
 
 Dans le dock, clique sur **Importer des mods (.jar)** et choisis le dossier `mods` de ton instance. Dans CurseForge, fais un clic droit sur le modpack puis « Open Folder » pour le trouver.
