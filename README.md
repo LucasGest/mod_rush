@@ -36,6 +36,8 @@ Tu peux régler l'overlay en ajoutant des options à la fin de l'URL :
 
 Le fichier `pack.json` contient les listes complètes et les icônes des 33 mods du profil ModRush. À la première ouverture du dock, la page le charge automatiquement : la roulette est prête sans rien importer. Pour le recharger plus tard, ouvre « Importer des mods (.jar) » et clique sur « Charger le modpack ModRush intégré au site ».
 
+En haut du dock, « Mis à jour le … » donne la date de la version du site. Si elle ne change pas après une mise en ligne, actualise le dock dans OBS. Pense à changer `SITE_UPDATED` dans `common.js` à chaque mise en ligne.
+
 Pendant un rush, le bouton **Retirer des objets** permet de supprimer définitivement d'un clic un objet impossible à obtenir en survie.
 
 ## Détection automatique depuis Minecraft
@@ -64,7 +66,7 @@ Ne vont pas dans la roulette : les librairies, les mods qui ont moins de 3 objet
 
 Dans le dock, clique sur **Importer des mods (.jar)** et choisis le dossier `mods` de ton instance. Dans CurseForge, fais un clic droit sur le modpack puis « Open Folder » pour le trouver.
 
-La page lit le fichier de traduction de chaque `.jar`, ce qui lui donne **tous les objets et blocs** du mod, nommés en français quand la traduction existe. Elle récupère aussi les icônes quand elles sont trouvées. Les librairies sans objets sont ignorées, et tout reste sur ton PC.
+La page lit le fichier de traduction de chaque `.jar`, ce qui lui donne **tous les objets et blocs** du mod, nommés en anglais par défaut, comme dans le jeu. Tu peux choisir le français dans « Langue des noms » : la liste entière est alors renommée, sans perdre le rush en cours. Elle récupère aussi les icônes quand elles sont trouvées. Les librairies sans objets sont ignorées, et tout reste sur ton PC.
 
 Fais l'import **depuis le dock OBS**, pas depuis Chrome, pour que l'overlay voie la même liste.
 

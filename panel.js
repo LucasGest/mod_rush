@@ -187,7 +187,7 @@ function rebaseItem(r, name){
 
 /* ---------- mises à jour des mods : compare les .jar du dossier mods à la dernière lecture ----------
    Empreinte d'un .jar = taille + date de modification. Un .jar nouveau ou modifié est relu et sa liste fusionnée. */
-const JARS_KEY="jars.v2"; // changer la clé force une relecture de tous les .jar (nouvelles règles de tri)
+const JARS_KEY="jars.v3"; // changer la clé force une relecture de tous les .jar (nouvelles règles de tri)
 let jarBusy=false, jarInfo={state:"", count:0, changes:[], missing:[]};
 async function scanJars(){
   if(jarBusy || !detDir || spinning) return; // pas de reconstruction de la roulette pendant un tirage
@@ -213,7 +213,7 @@ async function scanJars(){
     const changes=results.length||structMods.length ? await mergeJars(results, structMods) : [];
     const present=new Set(Object.values(now).map(x=>x.mod).filter(Boolean));
     jarInfo.missing=[...new Set(Object.values(known).map(x=>x.mod).filter(m=>m && !present.has(m)))];
-    if(changes.length) jarInfo.changes=changes;
+    if(changes.length){ jarInfo.changes=changes; try{ localStorage.setItem("modrush.modsUpdated", String(Date.now())); }catch(e){} }
     jarInfo.state="ok";
     await idbDo("handles", st=>st.put(now,JARS_KEY));
   }catch(e){ jarInfo.state = e && e.name==="NotAllowedError" ? "perm" : "err"; }
@@ -232,14 +232,24 @@ async function mergeJars(results, structMods=[]){
     if(!m && state.hiddenMods.includes(r.name)) continue; // mod retiré volontairement de la roulette
     if(!m){ list.push({name:r.name, items:r.items}); state.full[r.name]=true; changes.push({mod:r.name, isNew:true, added:r.items.length, gone:0}); }
     else{
+      // même objet (même identifiant) mais nom différent : langue changée ou traduction mise à jour → on renomme partout
+      const oldIds=IDS[r.name]||{}, byId=Object.create(null);
+      for(const [l,id] of Object.entries(r.ids)) byId[id]=l;
+      const ren=l=>{ const id=oldIds[l]; return id && byId[id] ? byId[id] : l; };
+      const renamed=m.items.filter(i=>ren(i)!==i).length;
+      if(renamed){
+        m.items=[...new Set(m.items.map(ren))];
+        if(state.removed[r.name]) state.removed[r.name]=[...new Set(state.removed[r.name].map(ren))];
+        if(state.run && state.run.mod===r.name){ state.run.checked=[...new Set(state.run.checked.map(ren))]; state.run.auto=[...new Set(state.run.auto.map(ren))]; }
+      }
       const removed=new Set(state.removed[r.name]||[]);
       const added=r.items.filter(i=>!m.items.includes(i) && !removed.has(i));
       // on ne retire des objets que d'une liste issue d'un .jar, jamais d'une liste tapée à la main
       const gone=state.full[r.name] ? m.items.filter(i=>!r.items.includes(i)) : [];
-      if(added.length || gone.length){
+      if(added.length || gone.length || renamed){
         m.items=m.items.filter(i=>!gone.includes(i)).concat(added);
         if(state.run && state.run.mod===r.name){ state.run.checked=state.run.checked.filter(i=>!gone.includes(i)); state.run.auto=state.run.auto.filter(i=>!gone.includes(i)); }
-        changes.push({mod:r.name, added:added.length, gone:gone.length});
+        changes.push({mod:r.name, added:added.length, gone:gone.length, renamed});
       }
     }
     await saveIcons(r.name, r.icons); await saveIds(r.name, r.ids);
@@ -274,13 +284,15 @@ function renderDetect(){
       if(age<STALE_MS) add("ok","Statistiques à jour",`Dernière sauvegarde du jeu il y a ${ago(age)}.`);
       else add("warn-c","Pas de sauvegarde récente",`Dernière il y a ${ago(age)}. Le jeu est-il lancé sur ce monde ? Minecraft sauvegarde toutes les 5 min.`);
     }else add("wait","Recherche du monde…");
-    const J=jarInfo, sum=J.changes.map(c=>c.structures?`${c.mod} retiré (mod de structures)`:c.isNew?`nouveau mod ${c.mod} (${c.added} objets)`:`${c.mod} : +${c.added} / −${c.gone}`).join(" · ");
+    const J=jarInfo, nRen=J.changes.filter(c=>c.renamed).length, sum=(nRen?[`noms d'objets mis à jour pour ${nRen} mod${nRen>1?"s":""}`]:[]).concat(J.changes.filter(c=>c.structures||c.isNew||c.added||c.gone).map(c=>c.structures?`${c.mod} retiré (mod de structures)`:c.isNew?`nouveau mod ${c.mod} (${c.added} objets)`:`${c.mod} : +${c.added} / −${c.gone}`)).join(" · ");
     if(J.state==="nomods") add("warn-c","Dossier mods introuvable","Pour suivre les mises à jour des mods, choisis le dossier de l'instance (celui qui contient mods et saves).");
     else if(J.state==="scan") add("wait",`Lecture de ${J.todo} mod${J.todo>1?"s":""} nouveau${J.todo>1?"x":""} ou mis à jour…`);
     else if(J.state==="err" || J.state==="perm") add("ko","Mods illisibles","Impossible de lire le dossier mods. Nouvel essai dans 30 s.");
     else if(J.state==="ok"){
       if(J.missing.length) add("warn-c",`Mod${J.missing.length>1?"s":""} absent${J.missing.length>1?"s":""} de l'instance`,`${J.missing.join(", ")} : toujours dans la roulette, retire-le${J.missing.length>1?"s":""} via « Modifier la liste » si besoin.`);
-      add("ok", J.changes.length?"Mods mis à jour":"Mods à jour", J.changes.length ? sum : `${J.count} fichiers .jar suivis.`);
+      let up=0; try{ up=+localStorage.getItem("modrush.modsUpdated")||0; }catch(e){}
+      const when=up ? `Mis à jour le ${frDate(up)} à ${new Date(up).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}.` : "";
+      add("ok", J.changes.length?"Mods mis à jour":"Mods à jour", (J.changes.length ? sum+". " : `${J.count} fichiers .jar suivis. `)+when);
     }
   }
   if(!r || r.finished) add("wait","En attente d'un rush","Les objets seront cochés dès qu'un mod est tiré.");
@@ -327,6 +339,8 @@ setInterval(()=>{
   $("hbTxt").textContent= on ? "overlay OBS connecté" : alive ? "overlay ouvert hors d'OBS" : "overlay non détecté";
 },1000);
 $("obsWarn").hidden = IN_OBS;
+const frDate=t=>new Date(t).toLocaleDateString("fr-FR");
+$("siteVer").textContent = "Mis à jour le "+frDate(SITE_UPDATED+"T12:00:00");
 $("ovUrl").textContent = new URL("overlay.html", location.href).href;
 $("dockUrl").textContent = new URL("./", location.href).href;
 
@@ -370,24 +384,30 @@ async function readJar(file, lang, skipEggs){
   name=safeName(name) || "Sans nom";
   // espaces de noms qui ont un fichier de langue
   const nss=new Set();
-  files.forEach(p=>{ const m=p.match(/^assets\/([^/]+)\/lang\/(en_us|fr_fr)\.json$/i); if(m && !SKIP_NS.has(m[1])) nss.add(m[1]); });
+  const langFile={}; // "ns/en_us" → chemin réel (certains mods écrivent en_US.json)
+  files.forEach(p=>{ const m=p.match(/^assets\/([^/]+)\/lang\/(en_us|fr_fr)\.json$/i); if(m && !SKIP_NS.has(m[1])){ nss.add(m[1]); langFile[m[1]+"/"+m[2].toLowerCase()]=p; } });
   const items=[], icons={}, itemIds={}, seen=new Set();
   for(const ns of nss){
-    const enF=zfile(zip,`assets/${ns}/lang/en_us.json`,MAX_LANG), locF=lang!=="en_us" && zfile(zip,`assets/${ns}/lang/${lang}.json`,MAX_LANG);
+    const lf=l=>langFile[ns+"/"+l] && zfile(zip,langFile[ns+"/"+l],MAX_LANG);
+    const enF=lf("en_us"), locF=lang!=="en_us" && lf(lang);
     const en=enF ? looseJson(await enF.async("string")) : {};
     const loc=locF ? looseJson(await locF.async("string")) : {};
-    if(!isObj(en) || !isObj(loc)) continue;
+    // en anglais, la traduction française sert à repérer les objets dont le nom anglais est généré par le jeu
+    const frF=lang==="en_us" && lf("fr_fr"), fr=frF ? looseJson(await frF.async("string")) : {};
+    if(!isObj(en) || !isObj(loc) || !isObj(fr)) continue;
     const ids=new Map();
-    for(const src of [en,loc]) for(const k of Object.keys(src)){
-      const m=k.match(/^(item|block)\.([^.]+)\.([a-z0-9_]+)$/);
+    for(const src of [en,loc,fr]) for(const k of Object.keys(src)){
+      // format standard "item.ns.id", ou inversé "ns.item.id" (Trash Cans…)
+      const m=k.match(/^(item|block)\.([^.]+)\.([a-z0-9_]+)$/) || k.match(/^([^.]+)\.(item|block)\.([a-z0-9_]+)$/)?.slice(0,4).map((x,i,a)=>i===1?a[2]:i===2?a[1]:x);
       if(!m || m[2]!==ns) continue;
       const id=m[3];
       if(isBlockOnly(id) || (skipEggs && /_spawn_egg$/.test(id))) continue;
-      if(!ids.has(id) || m[1]==="item") ids.set(id, k);
+      if(src===fr && !ids.has(id) && !zip.file(`assets/${ns}/models/item/${id}.json`) && !zip.file(`assets/${ns}/items/${id}.json`)) continue; // sans modèle : objet qui n'existe plus
+      if(!ids.has(id) || (src!==fr && m[1]==="item")) ids.set(id, k);
     }
     for(const [id,k] of ids){
       if(items.length>=MAX_ITEMS) break;
-      let label=(loc[k]||en[k]||id);
+      let label=(loc[k]||en[k]||(lang==="en_us" && fr[k] ? id.split("_").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ") : id));
       if(typeof label!=="string") continue;
       label=cleanText(label.replace(/§./g,"").replace(/^#+/,""));
       if(!label || isNoise(label) || isUnobtainable(label)) continue;
@@ -502,6 +522,9 @@ $("btnSave").onclick=()=>{
 const imp=$("imp");
 $("btnImport").onclick=()=>{ $("impReplace").checked = !Object.keys(state.full).length; imp.showModal(); };
 $("impClose").onclick=()=>imp.close();
+/* langue des noms d'objets : mémorisée ; en changer relit tous les .jar et renomme les objets */
+try{ const l=localStorage.getItem("modrush.lang"); if(l==="fr_fr"||l==="en_us") $("impLang").value=l; }catch(e){}
+$("impLang").onchange=async()=>{ try{ localStorage.setItem("modrush.lang",$("impLang").value); }catch(e){} await resetJars(); scanJars(); };
 $("impDir").onchange=e=>importFiles(e.target.files);
 $("impFiles").onchange=e=>importFiles(e.target.files);
 const drop=$("drop");

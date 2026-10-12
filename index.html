@@ -15,7 +15,7 @@
 <canvas id="fx"></canvas>
 <div class="wrap">
   <header>
-    <div class="brand"><h1>Mod Rush</h1><span class="tag">contrôle</span></div>
+    <div class="brand"><h1>Mod Rush</h1><span class="tag">contrôle</span><span class="ver" id="siteVer"></span></div>
     <div class="tools">
       <span class="status" title="L'overlay doit être ouvert dans OBS"><span class="dot" id="hbDot"></span><span id="hbTxt">overlay non détecté</span></span>
       <span class="status" title="Lecture des statistiques du monde Minecraft"><span class="dot" id="gameDot"></span><span id="gameTxt">jeu non suivi</span></span>
@@ -105,7 +105,7 @@
     <p>Choisis le dossier <code>mods</code> de ton instance CurseForge (clic droit sur le modpack, « Open Folder »). La page lit chaque .jar et récupère la liste complète de ses objets et blocs, avec leurs vraies icônes quand elles sont trouvées. Les librairies sans objets sont ignorées. Rien n'est envoyé sur internet.</p>
     <div class="fields">
       <label class="opt">Langue des noms
-        <select id="impLang"><option value="fr_fr" selected>Français</option><option value="en_us">English</option></select>
+        <select id="impLang"><option value="en_us" selected>English</option><option value="fr_fr">Français</option></select>
       </label>
       <label class="opt"><input type="checkbox" id="impEggs" checked> Ignorer les œufs d'apparition</label>
       <label class="opt"><input type="checkbox" id="impReplace" checked> Remplacer la liste actuelle</label>

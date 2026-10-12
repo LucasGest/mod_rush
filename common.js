@@ -1820,6 +1820,8 @@ Lootr Trapped Chest
 Lootr Shulker Box
 Lootr Minecart with Chest
 Trophy`;
+/* date de la version du site, affichée dans le dock : à changer à chaque mise en ligne */
+const SITE_UPDATED = "2026-10-12";
 const LS = "modrush.v4";
 const HB = "modrush.overlay.heartbeat";
 
