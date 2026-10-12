@@ -189,7 +189,7 @@ function rebaseItem(r, name){
    Empreinte d'un .jar = taille + date de modification. Un .jar nouveau ou modifié est relu et sa liste fusionnée. */
 let jarBusy=false, jarInfo={state:"", count:0, changes:[], missing:[]};
 async function scanJars(){
-  if(jarBusy || !detDir) return;
+  if(jarBusy || !detDir || spinning) return; // pas de reconstruction de la roulette pendant un tirage
   let modsDir; try{ modsDir=await detDir.getDirectoryHandle("mods"); }catch(e){ jarInfo.state="nomods"; renderDetect(); return; }
   if(typeof JSZip==="undefined"){ jarInfo.state="err"; renderDetect(); return; }
   jarBusy=true;
