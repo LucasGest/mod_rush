@@ -88,7 +88,7 @@ function handle(s){
   if(ev && ev.id!==seenEvent){
     seenEvent=ev.id;
     if(!first && Date.now()-ev.id<5000){
-      if(ev.type==="item"){ feed.unshift({mod:ev.mod,name:ev.name}); if(SOUND) beep(880+Math.random()*200,.08,"triangle",.08); }
+      if(ev.type==="item"){ for(const n of (ev.names.length?ev.names:[ev.name])) if(n) feed.unshift({mod:ev.mod,name:n}); if(SOUND) beep(880+Math.random()*200,.08,"triangle",.08); }
       if(ev.type==="undo"){ feed.unshift({mod:ev.mod,name:ev.name,undo:true}); }
       if(ev.type==="done"){ $("winTime").textContent=`${ev.mod} · ${fmt(ev.time)}`; $("win").classList.add("on"); if(SOUND) fanfare(); confetti($("fx"),1920,1080); setTimeout(()=>$("win").classList.remove("on"),9000); }
       if(ev.type==="start"){ feed.length=0; }

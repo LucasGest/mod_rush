@@ -38,6 +38,26 @@ Le fichier `pack.json` contient les listes complètes et les icônes des 33 mods
 
 Pendant un rush, le bouton **Retirer des objets** permet de supprimer définitivement d'un clic un objet impossible à obtenir en survie.
 
+## Détection automatique depuis Minecraft
+
+Le dock peut cocher les objets tout seul en lisant les statistiques de ton monde.
+
+1. Dans le panneau **Détection Minecraft**, clique sur « Choisir le dossier de l'instance » et sélectionne le dossier de l'instance CurseForge (par exemple `D:\curseForge\Instances\ModRush`, celui qui contient `mods` et `saves`).
+2. Accepte l'accès en lecture. Au démarrage suivant d'OBS, clique sur « Réactiver la détection » si la page le demande.
+
+La liste de vérifications indique si tout est OK : dossier autorisé, monde trouvé, statistiques à jour, mods à jour, objets du mod détectables. Le voyant « jeu » en haut passe au vert quand tout va bien.
+
+À savoir :
+
+- Un objet est coché quand il est **ramassé, fabriqué, utilisé ou jeté** après le tirage. L'option « Ne compter que ce qui est obtenu après le tirage » ignore ce que tu avais déjà dans ce monde. Si tu crées un nouveau monde après le tirage, tout ce qui s'y passe compte.
+- Minecraft n'écrit ses statistiques qu'aux **sauvegardes du monde** (automatiquement toutes les 5 minutes, et quand tu quittes le monde). Les objets apparaissent donc avec ce délai.
+- Un objet sorti d'une machine moddée sans être ramassé ni fabriqué peut ne pas être compté : coche-le à la main.
+- Si tu décoches un objet détecté, il ne sera recoché que si tu en obtiens un autre.
+
+### Mises à jour des mods
+
+Toutes les 30 secondes, le dock compare les `.jar` du dossier `mods` à la dernière lecture. Quand un mod est mis à jour ou ajouté, sa liste d'objets, ses icônes et ses identifiants sont relus et fusionnés. Les objets apparus sont ajoutés et ceux qui ont disparu du mod sont retirés. Les objets et les mods que tu as retirés toi-même (« Retirer des objets » ou « Modifier la liste ») ne reviennent pas. Un mod supprimé de l'instance est signalé, mais il reste dans la roulette jusqu'à ce que tu le retires.
+
 ## Importer les listes complètes des mods
 
 Dans le dock, clique sur **Importer des mods (.jar)** et choisis le dossier `mods` de ton instance. Dans CurseForge, fais un clic droit sur le modpack puis « Open Folder » pour le trouver.

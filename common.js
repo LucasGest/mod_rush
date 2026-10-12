@@ -1824,7 +1824,7 @@ const LS = "modrush.v4";
 const HB = "modrush.overlay.heartbeat";
 
 const MAX_TEXT=2000000, MAX_NAME=120;
-function defaultState(){ return { text: SAMPLE, full:Object.create(null), run:null, history:[], spin:null, event:null }; }
+function defaultState(){ return { text: SAMPLE, full:Object.create(null), removed:Object.create(null), hiddenMods:[], run:null, history:[], spin:null, event:null }; }
 
 /* ---------- sécurité : tout ce qui vient du stockage, de pack.json ou des .jar est validé avant usage ---------- */
 const isStr=v=>typeof v==="string", isNum=v=>typeof v==="number" && isFinite(v), isObj=v=>!!v && typeof v==="object" && !Array.isArray(v);
@@ -1837,16 +1837,29 @@ function cleanFull(f){ const out=Object.create(null); if(isObj(f)) for(const k o
 /* seules des images PNG en base64 sont acceptées comme icônes */
 const SAFE_ICON=/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/;
 function cleanIcons(m){ const out=Object.create(null); if(isObj(m)) for(const k of Object.keys(m)) if(!RESERVED.has(k) && isStr(m[k]) && m[k].length<120000 && SAFE_ICON.test(m[k])) out[k]=m[k]; return out; }
+/* identifiants Minecraft du type "create:cogwheel" */
+const SAFE_ID=/^[a-z0-9_.-]{1,64}:[a-z0-9_./-]{1,128}$/;
+function cleanIds(m){ const out=Object.create(null); if(isObj(m)) for(const k of Object.keys(m)) if(!RESERVED.has(k) && isStr(m[k]) && SAFE_ID.test(m[k])) out[k]=m[k]; return out; }
 const strs=a=>Array.isArray(a) ? a.filter(isStr).map(x=>x.slice(0,MAX_NAME)).slice(0,20000) : [];
 function cleanRun(r){
   if(!isObj(r) || !isStr(r.mod)) return null;
   return { mod:r.mod.slice(0,MAX_NAME), checked:[...new Set(strs(r.checked))], elapsed:isNum(r.elapsed)?Math.max(0,r.elapsed):0,
-    startedAt:isNum(r.startedAt)?r.startedAt:Date.now(), paused:r.paused===true, finished:r.finished===true };
+    startedAt:isNum(r.startedAt)?r.startedAt:Date.now(), paused:r.paused===true, finished:r.finished===true,
+    auto:strs(r.auto), base:cleanBase(r.base) };
+}
+/* compteurs Minecraft relevés au moment du tirage : seuls les gains après ce point cochent un objet */
+function cleanBase(b){
+  if(!isObj(b) || !isStr(b.src)) return null;
+  const counts=Object.create(null);
+  if(isObj(b.counts)) for(const k of Object.keys(b.counts)) if(SAFE_ID.test(k) && isNum(b.counts[k])) counts[k]=b.counts[k];
+  return { src:b.src.slice(0,300), counts };
 }
 function cleanState(s){
   const d=defaultState();
   if(!isObj(s) || !isStr(s.text)) return d;
   d.text=s.text.slice(0,MAX_TEXT); d.full=cleanFull(s.full); d.run=cleanRun(s.run);
+  d.hiddenMods=strs(s.hiddenMods).slice(0,500);
+  if(isObj(s.removed)) for(const k of Object.keys(s.removed)) if(!RESERVED.has(k)) d.removed[k]=strs(s.removed[k]).slice(0,5000);
   d.history=(Array.isArray(s.history)?s.history:[]).filter(h=>isObj(h) && isStr(h.mod)).slice(0,30).map(h=>({ mod:h.mod.slice(0,MAX_NAME),
     time:isNum(h.time)?h.time:0, done:h.done===true, got:isNum(h.got)?h.got:0, total:isNum(h.total)?h.total:0, at:isNum(h.at)?h.at:0 }));
   const sp=s.spin;
@@ -1854,7 +1867,7 @@ function cleanState(s){
     d.spin={id:sp.id, start:sp.start, target:sp.target, at:sp.at, dur:sp.dur, mod:sp.mod.slice(0,MAX_NAME)};
   const ev=s.event;
   if(isObj(ev) && isNum(ev.id) && ["start","item","undo","done","abandon"].includes(ev.type) && isStr(ev.mod))
-    d.event={id:ev.id, type:ev.type, mod:ev.mod.slice(0,MAX_NAME), name:isStr(ev.name)?ev.name.slice(0,MAX_NAME):undefined, time:isNum(ev.time)?ev.time:0};
+    d.event={id:ev.id, type:ev.type, mod:ev.mod.slice(0,MAX_NAME), name:isStr(ev.name)?ev.name.slice(0,MAX_NAME):undefined, names:strs(ev.names).slice(0,50), auto:ev.auto===true, time:isNum(ev.time)?ev.time:0};
   return d;
 }
 function loadState(){
@@ -1895,33 +1908,47 @@ const fmt = ms=>{ const s=Math.floor(ms/1000); return [s/3600|0,(s%3600)/60|0,s%
 function hash(str){ let h=2166136261; for(const c of str){ h^=c.charCodeAt(0); h=Math.imul(h,16777619);} return h>>>0; }
 
 /* ---------- icônes : vraies textures extraites des .jar (IndexedDB), sinon icône pixel générée ---------- */
-let ICONS=Object.create(null);
+/* stores : "icons" (mod → {objet: image}), "ids" (mod → {objet: identifiant Minecraft}), "handles" (dossier saves choisi) */
+let ICONS=Object.create(null), IDS=Object.create(null);
 function idb(){
   return new Promise((res,rej)=>{
-    const r=indexedDB.open("modrush",1);
-    r.onupgradeneeded=()=>r.result.createObjectStore("icons");
+    const r=indexedDB.open("modrush",2);
+    r.onupgradeneeded=()=>{ for(const s of ["icons","ids","handles"]) if(!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s); };
     r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
   });
 }
-async function loadIcons(){
+async function idbAll(store, clean){
+  const out=Object.create(null);
   try{
     const db=await idb();
     await new Promise((res)=>{
-      const tx=db.transaction("icons","readonly"), st=tx.objectStore("icons"), out=Object.create(null);
-      const c=st.openCursor();
-      c.onsuccess=()=>{ const cur=c.result; if(cur){ if(isStr(cur.key) && !RESERVED.has(cur.key)) out[cur.key]=cleanIcons(cur.value); cur.continue(); } else { ICONS=out; res(); } };
+      const c=db.transaction(store,"readonly").objectStore(store).openCursor();
+      c.onsuccess=()=>{ const cur=c.result; if(cur){ if(isStr(cur.key) && !RESERVED.has(cur.key)) out[cur.key]=clean(cur.value); cur.continue(); } else res(); };
       c.onerror=()=>res();
     });
   }catch(e){}
+  return out;
 }
+async function idbDo(store, fn){
+  try{ const db=await idb(); await new Promise(res=>{ const tx=db.transaction(store,"readwrite"); fn(tx.objectStore(store)); tx.oncomplete=res; tx.onerror=res; }); }catch(e){}
+}
+async function idbGet(store, key){
+  try{ const db=await idb(); return await new Promise(res=>{ const q=db.transaction(store,"readonly").objectStore(store).get(key); q.onsuccess=()=>res(q.result); q.onerror=()=>res(null); }); }catch(e){ return null; }
+}
+async function loadIcons(){ ICONS=await idbAll("icons", cleanIcons); IDS=await idbAll("ids", cleanIds); }
 async function saveIcons(mod, map){
   if(RESERVED.has(mod)) return;
   map=cleanIcons(map); ICONS[mod]=map;
-  try{ const db=await idb(); await new Promise(res=>{ const tx=db.transaction("icons","readwrite"); tx.objectStore("icons").put(map, mod); tx.oncomplete=res; tx.onerror=res; }); }catch(e){}
+  await idbDo("icons", st=>st.put(map, mod));
+}
+async function saveIds(mod, map){
+  if(RESERVED.has(mod)) return;
+  map=cleanIds(map); IDS[mod]=map;
+  await idbDo("ids", st=>st.put(map, mod));
 }
 async function clearIcons(){
-  ICONS=Object.create(null);
-  try{ const db=await idb(); await new Promise(res=>{ const tx=db.transaction("icons","readwrite"); tx.objectStore("icons").clear(); tx.oncomplete=res; tx.onerror=res; }); }catch(e){}
+  ICONS=Object.create(null); IDS=Object.create(null);
+  await idbDo("icons", st=>st.clear()); await idbDo("ids", st=>st.clear());
 }
 const genCache=Object.create(null);
 function genIcon(name){

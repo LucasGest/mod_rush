@@ -18,6 +18,7 @@
     <div class="brand"><h1>Mod Rush</h1><span class="tag">contrôle</span></div>
     <div class="tools">
       <span class="status" title="L'overlay doit être ouvert dans OBS"><span class="dot" id="hbDot"></span><span id="hbTxt">overlay non détecté</span></span>
+      <span class="status" title="Lecture des statistiques du monde Minecraft"><span class="dot" id="gameDot"></span><span id="gameTxt">jeu non suivi</span></span>
       <button class="btn" id="btnImport" type="button">Importer des mods (.jar)</button>
       <button class="btn" id="btnEdit" type="button">Modifier la liste</button>
       <button class="btn" id="btnSound" type="button" aria-pressed="false">Son ici : off</button>
@@ -48,6 +49,18 @@
             <button class="btn" id="btnPause" type="button" disabled>Pause</button>
             <button class="btn danger" id="btnAbandon" type="button" disabled>Abandonner</button>
           </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Détection Minecraft">
+        <div class="panel-h"><span>Détection Minecraft</span><span id="detState">désactivée</span></div>
+        <div class="detect">
+          <ul class="checks" id="detChecks" aria-live="polite"></ul>
+          <div class="row">
+            <button class="btn" id="btnDetect" type="button">Choisir le dossier de l'instance</button>
+            <button class="btn" id="btnDetectStop" type="button" hidden>Arrêter</button>
+          </div>
+          <label class="opt"><input type="checkbox" id="optFresh" checked> Ne compter que ce qui est obtenu après le tirage</label>
         </div>
       </section>
 
