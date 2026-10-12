@@ -50,3 +50,13 @@ Limites à connaître :
 
 - Quelques blocs techniques peuvent apparaître dans la liste alors qu'ils n'existent pas comme objet en survie. Les objets réservés au créatif sont aussi listés. Tu peux les retirer dans « Modifier la liste ».
 - Les objets générés par des données (par exemple certains minerais ou matériaux de Tinkers) peuvent manquer s'ils n'ont pas leur propre ligne de traduction.
+
+## Sécurité
+
+Le site n'a ni serveur ni base de données : tout reste dans le navigateur d'OBS (localStorage + IndexedDB).
+
+- `vercel.json` envoie les en-têtes de sécurité (CSP stricte, anti-clickjacking, `nosniff`, HSTS…). Les pages ont aussi une CSP en balise meta.
+- Aucun script inline : le code est dans `common.js`, `panel.js` et `overlay.js`. JSZip est chargé avec une empreinte SRI.
+- Tout ce qui vient des `.jar`, de `pack.json` ou du stockage est validé : noms nettoyés, icônes limitées aux PNG, état vérifié au chargement, taille des archives limitée.
+
+Si tu ajoutes une librairie externe ou une nouvelle origine (police, API), mets à jour la CSP dans `vercel.json` **et** dans les balises meta des deux pages.

@@ -1823,9 +1823,42 @@ Trophy`;
 const LS = "modrush.v4";
 const HB = "modrush.overlay.heartbeat";
 
-function defaultState(){ return { text: SAMPLE, full:{}, run:null, history:[], spin:null, event:null }; }
+const MAX_TEXT=2000000, MAX_NAME=120;
+function defaultState(){ return { text: SAMPLE, full:Object.create(null), run:null, history:[], spin:null, event:null }; }
+
+/* ---------- sécurité : tout ce qui vient du stockage, de pack.json ou des .jar est validé avant usage ---------- */
+const isStr=v=>typeof v==="string", isNum=v=>typeof v==="number" && isFinite(v), isObj=v=>!!v && typeof v==="object" && !Array.isArray(v);
+/* remplace les caractères de contrôle et d'inversion de sens (noms trompeurs) par des espaces, et limite la longueur */
+function cleanText(v, max=MAX_NAME){ return String(v).replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g," ").trim().slice(0,max); }
+/* noms qui casseraient les objets JS utilisés comme dictionnaires */
+const RESERVED=new Set(["__proto__","constructor","prototype"]);
+function safeName(v){ const t=cleanText(v); return RESERVED.has(t) ? t+" (mod)" : t; }
+function cleanFull(f){ const out=Object.create(null); if(isObj(f)) for(const k of Object.keys(f)) if(f[k]===true && !RESERVED.has(k)) out[k]=true; return out; }
+/* seules des images PNG en base64 sont acceptées comme icônes */
+const SAFE_ICON=/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/;
+function cleanIcons(m){ const out=Object.create(null); if(isObj(m)) for(const k of Object.keys(m)) if(!RESERVED.has(k) && isStr(m[k]) && m[k].length<120000 && SAFE_ICON.test(m[k])) out[k]=m[k]; return out; }
+const strs=a=>Array.isArray(a) ? a.filter(isStr).map(x=>x.slice(0,MAX_NAME)).slice(0,20000) : [];
+function cleanRun(r){
+  if(!isObj(r) || !isStr(r.mod)) return null;
+  return { mod:r.mod.slice(0,MAX_NAME), checked:[...new Set(strs(r.checked))], elapsed:isNum(r.elapsed)?Math.max(0,r.elapsed):0,
+    startedAt:isNum(r.startedAt)?r.startedAt:Date.now(), paused:r.paused===true, finished:r.finished===true };
+}
+function cleanState(s){
+  const d=defaultState();
+  if(!isObj(s) || !isStr(s.text)) return d;
+  d.text=s.text.slice(0,MAX_TEXT); d.full=cleanFull(s.full); d.run=cleanRun(s.run);
+  d.history=(Array.isArray(s.history)?s.history:[]).filter(h=>isObj(h) && isStr(h.mod)).slice(0,30).map(h=>({ mod:h.mod.slice(0,MAX_NAME),
+    time:isNum(h.time)?h.time:0, done:h.done===true, got:isNum(h.got)?h.got:0, total:isNum(h.total)?h.total:0, at:isNum(h.at)?h.at:0 }));
+  const sp=s.spin;
+  if(isObj(sp) && [sp.id,sp.start,sp.target,sp.at,sp.dur].every(isNum) && isStr(sp.mod) && sp.dur>0 && sp.dur<=10000 && Math.abs(sp.target-sp.start)<100000)
+    d.spin={id:sp.id, start:sp.start, target:sp.target, at:sp.at, dur:sp.dur, mod:sp.mod.slice(0,MAX_NAME)};
+  const ev=s.event;
+  if(isObj(ev) && isNum(ev.id) && ["start","item","undo","done","abandon"].includes(ev.type) && isStr(ev.mod))
+    d.event={id:ev.id, type:ev.type, mod:ev.mod.slice(0,MAX_NAME), name:isStr(ev.name)?ev.name.slice(0,MAX_NAME):undefined, time:isNum(ev.time)?ev.time:0};
+  return d;
+}
 function loadState(){
-  try{ const s=JSON.parse(localStorage.getItem(LS)||"null"); if(s && typeof s.text==="string") return Object.assign(defaultState(), s); }catch(e){}
+  try{ return cleanState(JSON.parse(localStorage.getItem(LS)||"null")); }catch(e){}
   return defaultState();
 }
 let bc=null; try{ bc=new BroadcastChannel("modrush"); }catch(e){}
@@ -1847,8 +1880,8 @@ function parse(text){
   const mods=[]; let cur=null;
   text.split(/\r?\n/).forEach(l=>{
     const t=l.trim(); if(!t) return;
-    if(t.startsWith("#")){ cur={name:t.replace(/^#+\s*/,"").trim()||"Sans nom", items:[]}; mods.push(cur); }
-    else if(cur && !cur.items.includes(t)) cur.items.push(t);
+    if(t.startsWith("#")){ cur={name:safeName(t.replace(/^#+\s*/,""))||"Sans nom", items:[]}; mods.push(cur); }
+    else if(cur){ const n=cleanText(t); if(n && !cur.items.includes(n)) cur.items.push(n); }
   });
   return mods.filter(m=>m.items.length);
 }
@@ -1857,12 +1890,12 @@ function serialize(mods){ return mods.map(m=>"# "+m.name+"\n"+m.items.join("\n")
 function runElapsed(r){ if(!r) return 0; return r.elapsed + (r.paused||r.finished ? 0 : Date.now()-r.startedAt); }
 
 const $ = id=>document.getElementById(id);
-const esc = s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const esc = s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = ms=>{ const s=Math.floor(ms/1000); return [s/3600|0,(s%3600)/60|0,s%60].map(n=>String(n).padStart(2,"0")).join(":"); };
 function hash(str){ let h=2166136261; for(const c of str){ h^=c.charCodeAt(0); h=Math.imul(h,16777619);} return h>>>0; }
 
 /* ---------- icônes : vraies textures extraites des .jar (IndexedDB), sinon icône pixel générée ---------- */
-let ICONS={};
+let ICONS=Object.create(null);
 function idb(){
   return new Promise((res,rej)=>{
     const r=indexedDB.open("modrush",1);
@@ -1874,22 +1907,23 @@ async function loadIcons(){
   try{
     const db=await idb();
     await new Promise((res)=>{
-      const tx=db.transaction("icons","readonly"), st=tx.objectStore("icons"), out={};
+      const tx=db.transaction("icons","readonly"), st=tx.objectStore("icons"), out=Object.create(null);
       const c=st.openCursor();
-      c.onsuccess=()=>{ const cur=c.result; if(cur){ out[cur.key]=cur.value; cur.continue(); } else { ICONS=out; res(); } };
+      c.onsuccess=()=>{ const cur=c.result; if(cur){ if(isStr(cur.key) && !RESERVED.has(cur.key)) out[cur.key]=cleanIcons(cur.value); cur.continue(); } else { ICONS=out; res(); } };
       c.onerror=()=>res();
     });
   }catch(e){}
 }
 async function saveIcons(mod, map){
-  ICONS[mod]=map;
+  if(RESERVED.has(mod)) return;
+  map=cleanIcons(map); ICONS[mod]=map;
   try{ const db=await idb(); await new Promise(res=>{ const tx=db.transaction("icons","readwrite"); tx.objectStore("icons").put(map, mod); tx.oncomplete=res; tx.onerror=res; }); }catch(e){}
 }
 async function clearIcons(){
-  ICONS={};
+  ICONS=Object.create(null);
   try{ const db=await idb(); await new Promise(res=>{ const tx=db.transaction("icons","readwrite"); tx.objectStore("icons").clear(); tx.oncomplete=res; tx.onerror=res; }); }catch(e){}
 }
-const genCache={};
+const genCache=Object.create(null);
 function genIcon(name){
   if(genCache[name]) return genCache[name];
   const h=hash(name), hue=h%360, c=document.createElement("canvas"); c.width=c.height=5;
@@ -1899,7 +1933,7 @@ function genIcon(name){
   }
   return genCache[name]=c.toDataURL();
 }
-function iconFor(mod, name){ return (ICONS[mod] && ICONS[mod][name]) || genIcon(name); }
+function iconFor(mod, name){ const v=ICONS[mod] && ICONS[mod][name]; return isStr(v) && SAFE_ICON.test(v) ? v : genIcon(name); }
 function iconHtml(mod, name){ return `<img class="ico" alt="" src="${iconFor(mod,name)}">`; }
 
 /* ---------- sons ---------- */
